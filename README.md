@@ -51,12 +51,13 @@ dotnet run --project src/Dictum/Dictum.csproj
 
 При первом запуске приложение попросит путь к модели. Дальше — удерживай Ctrl+Win и говори.
 
-Публикация одним файлом:
+Публикация папкой (self-contained, без установленного .NET у пользователя):
 
 ```powershell
-dotnet publish src/Dictum/Dictum.csproj -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+dotnet publish src/Dictum/Dictum.csproj -c Release -r win-x64 --self-contained true -o publish
 ```
+
+Важно: `PublishSingleFile` **не используется** — Whisper.net ищет нативную `whisper.dll` рядом с приложением и внутри single-file бандла её не находит.
 
 ## Ускорение на GPU
 

@@ -36,10 +36,12 @@ public sealed class AppController : IDisposable
 
     public void Start()
     {
+        Log.Write($"started, model='{_settings.ModelPath}', lang={_settings.Language}");
         _tray.ShowInfo("Dictum запущен", "Удерживай Ctrl+Win и говори.");
 
         if (string.IsNullOrWhiteSpace(_settings.ModelPath) || !File.Exists(_settings.ModelPath))
         {
+            Log.Write("model missing, opening settings");
             ShowSettings();
         }
     }
@@ -54,11 +56,15 @@ public sealed class AppController : IDisposable
         _targetWindow = _injector.CaptureTarget();
         _recordedAt = DateTime.UtcNow;
         _recorder.Start();
+        Log.Write($"press, target=0x{_targetWindow.ToInt64():X}");
     }
 
     private async void OnReleased(object? sender, EventArgs e)
     {
         var pcm = _recorder.Stop();
+        var elapsed = (DateTime.UtcNow - _recordedAt).TotalMilliseconds;
+        Log.Write($"release, bytes={pcm.Length}, duration={elapsed:F0}ms");
+
         if (pcm.Length == 0)
         {
             return;
@@ -73,6 +79,7 @@ public sealed class AppController : IDisposable
         try
         {
             var text = await TranscribeAsync(pcm);
+            Log.Write($"asr: {text.Length} chars: '{text}'");
             if (string.IsNullOrWhiteSpace(text))
             {
                 return;
@@ -84,6 +91,7 @@ public sealed class AppController : IDisposable
         }
         catch (Exception ex)
         {
+            Log.Write("error: " + ex);
             _tray.ShowError("Dictum: ошибка", ex.Message);
         }
         finally
@@ -118,6 +126,7 @@ public sealed class AppController : IDisposable
 
         _settings = window.Result;
         _store.Save(_settings);
+        Log.Write($"settings saved: model='{_settings.ModelPath}', lang={_settings.Language}");
         _transcriber?.Dispose();
         _transcriber = null;
     }
