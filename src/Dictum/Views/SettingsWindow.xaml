@@ -1,0 +1,55 @@
+<Window x:Class="Dictum.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dictum — настройки"
+        Height="340"
+        Width="640"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Margin="0,0,0,6"
+                   FontWeight="SemiBold"
+                   Text="Путь к модели Whisper (.bin)" />
+
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="ModelPathBox" Grid.Column="0" Padding="6" VerticalContentAlignment="Center" />
+            <Button Grid.Column="1" Width="96" Margin="8,0,0,0" Content="Обзор…" Click="OnBrowse" />
+        </Grid>
+
+        <TextBlock Grid.Row="2"
+                   Margin="0,0,0,6"
+                   FontWeight="SemiBold"
+                   Text="Язык распознавания" />
+
+        <ComboBox x:Name="LanguageBox" Grid.Row="3" Width="220" HorizontalAlignment="Left">
+            <ComboBoxItem Content="ru" />
+            <ComboBoxItem Content="en" />
+            <ComboBoxItem Content="auto" />
+        </ComboBox>
+
+        <TextBlock Grid.Row="4"
+                   Margin="0,16,0,0"
+                   VerticalAlignment="Top"
+                   Foreground="#666"
+                   TextWrapping="Wrap"
+                   Text="Удерживай Ctrl+Win и говори. Отпусти — текст будет напечатан в активное окно. Приложение не устанавливает глобальный хук клавиатуры: оно опрашивает состояние двух клавиш, поэтому не выглядит для антивируса как кейлоггер." />
+
+        <StackPanel Grid.Row="5" HorizontalAlignment="Right" Orientation="Horizontal">
+            <Button Width="100" Margin="0,0,8,0" Content="Отмена" Click="OnCancel" />
+            <Button Width="110" Content="Сохранить" IsDefault="True" Click="OnSave" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,137 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  PROJECT: src/Dictum/Dictum.csproj
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT }}
+
+      - name: Publish (self-contained, single file)
+        run: >
+          dotnet publish ${{ env.PROJECT }}
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=embedded
+          -o publish
+
+      # Signing is optional so the workflow stays green on forks.
+      # Configure the five AZURE_* secrets to enable it.
+      - name: Sign executable (Azure Trusted Signing)
+        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: publish
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: >
+          iscc installer/dictum.iss
+          /DAppVersion=${{ github.ref_name }}
+          /DSourceDir=${{ github.workspace }}\publish
+          /DOutputDir=${{ github.workspace }}\artifacts
+
+      - name: Sign installer
+        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: artifacts
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts -Filter *.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            "$hash  $($_.Name)"
+          } | Set-Content artifacts/SHA256SUMS.txt -Encoding utf8
+
+      # Optional: needs a free VirusTotal API key in repository secrets.
+      - name: VirusTotal pre-flight
+        if: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
+        shell: pwsh
+        run: |
+          $key = "${{ secrets.VIRUSTOTAL_API_KEY }}"
+          $file = Get-ChildItem artifacts -Filter *.exe | Select-Object -First 1
+          if (-not $file) { throw "No installer found" }
+
+          $upload = Invoke-RestMethod -Method Post `
+            -Uri "https://www.virustotal.com/api/v3/files" `
+            -Headers @{ "x-apikey" = $key } `
+            -Form @{ file = Get-Item $file.FullName }
+
+          $id = $upload.data.id
+          Write-Host "Analysis id: $id"
+
+          for ($i = 0; $i -lt 12; $i++) {
+            Start-Sleep -Seconds 30
+            $report = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$id" -Headers @{ "x-apikey" = $key }
+            if ($report.data.attributes.status -eq "completed") { break }
+          }
+
+          $s = $report.data.attributes.stats
+          $detections = $s.malicious + $s.suspicious
+          Write-Host "Detections: $detections (malicious $($s.malicious), suspicious $($s.suspicious), undetected $($s.undetected))"
+
+          if ($detections -gt 3) {
+            throw "VirusTotal reported $detections detections — release stopped."
+          }
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: artifacts/*.exe
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.exe
+            artifacts/SHA256SUMS.txt
+          generate_release_notes: true
