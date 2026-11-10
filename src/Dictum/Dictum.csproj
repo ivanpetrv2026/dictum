@@ -12,8 +12,8 @@
     <RootNamespace>Dictum</RootNamespace>
     <Product>Dictum</Product>
     <AssemblyTitle>Dictum — local voice dictation</AssemblyTitle>
-    <Version>0.1.1</Version>
-    <FileVersion>0.1.1.0</FileVersion>
+    <Version>0.1.2</Version>
+    <FileVersion>0.1.2.0</FileVersion>
     <Company>Your Name</Company>
     <Copyright>MIT</Copyright>
     <InvariantGlobalization>false</InvariantGlobalization>
@@ -27,6 +27,17 @@
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda12" Version="1.9.1" />
   </ItemGroup>
+
+  <!-- Whisper.net ships native binaries for every RID; keep only what a
+       Windows x64 build can use, otherwise the installer grows past 1 GB. -->
+  <Target Name="TrimForeignRuntimes" AfterTargets="Publish">
+    <ItemGroup>
+      <ForeignRuntimeFiles Include="$(PublishDir)runtimes\**\*.*"
+                           Exclude="$(PublishDir)runtimes\win-x64\**\*.*;$(PublishDir)runtimes\cuda12\win-x64\**\*.*" />
+    </ItemGroup>
+    <Delete Files="@(ForeignRuntimeFiles)" ContinueOnError="true" />
+  </Target>
 
 </Project>

@@ -6,6 +6,7 @@ using Dictum.Settings;
 using Dictum.Speech;
 using Dictum.Tray;
 using Dictum.Views;
+using Whisper.net.LibraryLoader;
 
 namespace Dictum.Services;
 
@@ -36,6 +37,7 @@ public sealed class AppController : IDisposable
 
     public void Start()
     {
+        CudaBootstrap.Prepare();
         Log.Write($"started, model='{_settings.ModelPath}', lang={_settings.Language}");
         _tray.ShowInfo("Dictum запущен", "Удерживай Ctrl+Win и говори.");
 
@@ -113,6 +115,23 @@ public sealed class AppController : IDisposable
             throw new InvalidOperationException("Модель Whisper не найдена. Укажи путь в настройках.");
         }
 
+        if (CudaBootstrap.IsAvailable)
+        {
+            try
+            {
+                RuntimeOptions.RuntimeLibraryOrder = new List<RuntimeLibrary> { RuntimeLibrary.Cuda12 };
+                var cuda = new WhisperTranscriber(_settings.ModelPath, _settings.Language);
+                Log.Write("asr runtime: cuda12");
+                return cuda;
+            }
+            catch (Exception ex)
+            {
+                Log.Write("cuda failed, falling back to CPU: " + ex.Message);
+            }
+        }
+
+        RuntimeOptions.RuntimeLibraryOrder = new List<RuntimeLibrary> { RuntimeLibrary.Cpu };
+        Log.Write("asr runtime: cpu");
         return new WhisperTranscriber(_settings.ModelPath, _settings.Language);
     }
 

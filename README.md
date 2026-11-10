@@ -61,15 +61,22 @@ dotnet publish src/Dictum/Dictum.csproj -c Release -r win-x64 --self-contained t
 
 ## Ускорение на GPU
 
-По умолчанию используется CPU-рантайм. Для CUDA замени пакет:
+CUDA-бэкенд уже включён в сборку: `Whisper.net.Runtime.Cuda12` плюс CPU-рантайм как запасной. При старте приложение ищет библиотеки CUDA в двух местах:
 
-```xml
-<PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
-<!-- на -->
-<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1" />
+1. папка `cuda` рядом с `Dictum.exe`;
+2. `%LOCALAPPDATA%\Dictum\cuda`.
+
+Если библиотеки найдены — распознавание идёт на GPU (в логе появляется `asr runtime: cuda12`), если нет — автоматически откатывается на CPU, диктовка продолжает работать.
+
+cuBLAS и CUDA runtime нельзя положить в установщик (это ~740 МБ), поэтому они скачиваются один раз:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\Get-CudaRuntime.ps1
 ```
 
-Учти: CUDA-рантайм тянет за собой библиотеки cuBLAS (~700 МБ), поэтому в релизной сборке их лучше скачивать отдельно, а не класть в установщик.
+Скрипт берёт архивы с официального редиста NVIDIA и кладёт три DLL в `%LOCALAPPDATA%\Dictum\cuda`.
+
+Замеры на RTX 3050 для 14 секунд аудио с моделью `large-v3-turbo`: CPU — около 19 секунд, GPU — 1,1 секунды после загрузки модели в память.
 
 ## Релиз
 

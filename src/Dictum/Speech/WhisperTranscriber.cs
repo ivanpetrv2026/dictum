@@ -5,8 +5,8 @@ using Whisper.net;
 namespace Dictum.Speech;
 
 /// <summary>
-/// Thin wrapper over whisper.cpp (via Whisper.net). Model is loaded once and
-/// kept in memory; recognition runs fully offline.
+/// Thin wrapper over whisper.cpp (via Whisper.net). The model is loaded once
+/// and kept in memory; recognition runs fully offline.
 /// </summary>
 public sealed class WhisperTranscriber : IDisposable
 {
@@ -56,6 +56,7 @@ public sealed class WhisperTranscriber : IDisposable
     {
         const int headerSize = 44;
         var stream = new MemoryStream(headerSize + pcm.Length);
+
         using (var writer = new BinaryWriter(stream, Encoding.ASCII, leaveOpen: true))
         {
             var blockAlign = (short)(channels * bitsPerSample / 8);
