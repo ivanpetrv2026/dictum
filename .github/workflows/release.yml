@@ -13,6 +13,9 @@ permissions:
 env:
   DOTNET_VERSION: "8.0.x"
   PROJECT: src/Dictum/Dictum.csproj
+  # secrets are not allowed in `if:` expressions; expose them as env flags instead
+  SIGNING_ENABLED: ${{ secrets.AZURE_TENANT_ID != '' }}
+  VT_ENABLED: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
 
 jobs:
   build:
@@ -42,7 +45,7 @@ jobs:
       # Signing is optional so the workflow stays green on forks.
       # Configure the five AZURE_* secrets to enable it.
       - name: Sign executable (Azure Trusted Signing)
-        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        if: env.SIGNING_ENABLED == 'true'
         uses: azure/trusted-signing-action@v0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -69,7 +72,7 @@ jobs:
           /DOutputDir=${{ github.workspace }}\artifacts
 
       - name: Sign installer
-        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        if: env.SIGNING_ENABLED == 'true'
         uses: azure/trusted-signing-action@v0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -94,7 +97,7 @@ jobs:
 
       # Optional: needs a free VirusTotal API key in repository secrets.
       - name: VirusTotal pre-flight
-        if: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
+        if: env.VT_ENABLED == 'true'
         shell: pwsh
         run: |
           $key = "${{ secrets.VIRUSTOTAL_API_KEY }}"
