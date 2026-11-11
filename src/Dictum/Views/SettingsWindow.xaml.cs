@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Dictum.Services;
@@ -72,6 +73,7 @@ public partial class SettingsWindow : Window
 
         _initializing = false;
         UpdateDashboard();
+        BuildModelsList();
     }
 
     public AppSettings Result => _settings;
@@ -110,6 +112,157 @@ public partial class SettingsWindow : Window
             : string.Join(
                 Environment.NewLine,
                 _stats.Recent.Take(5).Select(entry => $"{entry.Time:HH:mm}   {entry.Text}"));
+    }
+
+    private void BuildModelsList()
+    {
+        ModelsPanel.Children.Clear();
+        var muted = (System.Windows.Media.Brush)FindResource("TextMutedBrush");
+
+        foreach (var model in ModelCatalog.Models)
+        {
+            var installed = ModelCatalog.IsInstalled(model);
+            var selected = string.Equals(_settings.ModelPath, ModelCatalog.PathFor(model), StringComparison.OrdinalIgnoreCase);
+
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock
+            {
+                Text = model.Title,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 14
+            });
+            text.Children.Add(new TextBlock
+            {
+                Text = (installed ? "скачана" : "не скачана") + "   ·   " + model.SizeText + (selected ? "   ·   используется" : string.Empty),
+                Foreground = muted,
+                FontSize = 12,
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+            if (!installed)
+            {
+                var download = new Button { Content = "Скачать", Width = 110, Tag = model };
+                download.Click += OnDownloadModel;
+                actions.Children.Add(download);
+            }
+            else
+            {
+                if (!selected)
+                {
+                    var use = new Button { Content = "Использовать", Width = 120, Tag = model };
+                    use.Click += OnUseModel;
+                    actions.Children.Add(use);
+                }
+
+                var remove = new Button { Content = "Удалить", Width = 100, Margin = new Thickness(8, 0, 0, 0), Tag = model };
+                remove.Click += OnDeleteModel;
+                actions.Children.Add(remove);
+            }
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(text, 0);
+            Grid.SetColumn(actions, 1);
+            grid.Children.Add(text);
+            grid.Children.Add(actions);
+
+            ModelsPanel.Children.Add(new Border
+            {
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 0, 0, 8),
+                Background = (System.Windows.Media.Brush)FindResource("SurfaceBrush"),
+                CornerRadius = new CornerRadius(10),
+                Child = grid
+            });
+        }
+    }
+
+    private async void OnDownloadModel(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not ModelInfo model)
+        {
+            return;
+        }
+
+        ModelProgress.Visibility = Visibility.Visible;
+        ModelProgress.Value = 0;
+        ModelStatus.Text = "Начинаю загрузку…";
+
+        var progress = new Progress<(long Read, long Total)>(value =>
+        {
+            ModelProgress.Value = value.Total > 0 ? value.Read * 100.0 / value.Total : 0;
+            ModelStatus.Text = value.Total > 0
+                ? $"Скачано {value.Read / 1048576.0:F0} из {value.Total / 1048576.0:F0} МБ"
+                : $"Скачано {value.Read / 1048576.0:F0} МБ";
+        });
+
+        try
+        {
+            await ModelCatalog.DownloadAsync(model, progress, CancellationToken.None);
+            _settings.ModelPath = ModelCatalog.PathFor(model);
+            ModelStatus.Text = "Готово: модель скачана и выбрана.";
+        }
+        catch (Exception ex)
+        {
+            ModelStatus.Text = "Ошибка загрузки: " + ex.Message;
+        }
+        finally
+        {
+            ModelProgress.Visibility = Visibility.Collapsed;
+            BuildModelsList();
+        }
+    }
+
+    private void OnUseModel(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not ModelInfo model)
+        {
+            return;
+        }
+
+        _settings.ModelPath = ModelCatalog.PathFor(model);
+        ModelStatus.Text = "Выбрана модель: " + model.Title;
+        BuildModelsList();
+    }
+
+    private void OnDeleteModel(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not ModelInfo model)
+        {
+            return;
+        }
+
+        var isCurrent = string.Equals(_settings.ModelPath, ModelCatalog.PathFor(model), StringComparison.OrdinalIgnoreCase);
+        var answer = MessageBox.Show(
+            $"Удалить файл модели «{model.Title}»?" + (isCurrent ? "\n\nОна используется сейчас — после удаления нужно будет выбрать другую." : string.Empty),
+            "Удаление модели",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(ModelCatalog.PathFor(model));
+            if (isCurrent)
+            {
+                _settings.ModelPath = string.Empty;
+            }
+
+            ModelStatus.Text = "Модель удалена.";
+        }
+        catch (Exception ex)
+        {
+            ModelStatus.Text = "Не удалось удалить: " + ex.Message;
+        }
+
+        BuildModelsList();
     }
 
     private static string FormatTerms(IEnumerable<VocabularyTerm> terms) =>

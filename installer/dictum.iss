@@ -14,6 +14,10 @@
   #define OutputDir "..\artifacts"
 #endif
 
+#ifndef Edition
+  #define Edition "full"
+#endif
+
 [Setup]
 AppId={{6F2C1B7A-3E4D-4A8B-9C1E-5D2A7B8C9E10}
 AppName={#AppName}
@@ -23,7 +27,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=Dictum_{#AppVersion}_x64_setup
+OutputBaseFilename=Dictum_{#AppVersion}_x64_{#Edition}_setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

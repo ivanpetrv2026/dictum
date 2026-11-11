@@ -61,13 +61,13 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Build installer
+      - name: Build installers (full + lite)
         shell: pwsh
-        run: >
-          iscc installer/dictum.iss
-          /DAppVersion=${{ github.ref_name }}
-          /DSourceDir=${{ github.workspace }}\publish
-          /DOutputDir=${{ github.workspace }}\artifacts
+        run: |
+          iscc installer/dictum.iss /DAppVersion=${{ github.ref_name }} /DSourceDir=${{ github.workspace }}\publish /DOutputDir=${{ github.workspace }}\artifacts /DEdition=full
+          Copy-Item publish publish-lite -Recurse
+          Remove-Item publish-lite\runtimes\cuda12 -Recurse -Force
+          iscc installer/dictum.iss /DAppVersion=${{ github.ref_name }} /DSourceDir=${{ github.workspace }}\publish-lite /DOutputDir=${{ github.workspace }}\artifacts /DEdition=lite
 
       - name: Sign installer
         if: env.SIGNING_ENABLED == 'true'

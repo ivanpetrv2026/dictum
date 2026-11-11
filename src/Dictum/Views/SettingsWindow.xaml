@@ -66,8 +66,27 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Настройки">
+            <TabItem Header="Модели">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+                        <TextBlock FontSize="18" FontWeight="Bold" Text="Модели распознавания" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Файлы хранятся в %LOCALAPPDATA%\Dictum\models и работают офлайн. Чем больше модель, тем выше точность и тем больше видеопамяти она занимает." />
+
+                        <ProgressBar x:Name="ModelProgress" Height="8" Margin="0,16,0,0" Visibility="Collapsed" />
+                        <TextBlock x:Name="ModelStatus"
+                                   Margin="0,8,0,0"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel x:Name="ModelsPanel" Margin="0,16,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Настройки">                <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid Margin="20">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
