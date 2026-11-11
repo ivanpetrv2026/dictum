@@ -1,25 +1,27 @@
-using System.Runtime.InteropServices;
 using System.Windows.Threading;
 
 namespace Dictum.Input;
 
 /// <summary>
-/// Detects a chord of modifier keys by polling key state instead of installing
-/// a low-level keyboard hook. WH_KEYBOARD_LL is what keyloggers use, and it is
-/// the single biggest reason dictation utilities get flagged by antivirus.
-/// Polling two keys every 30 ms costs nothing and keeps the process clean.
+/// Detects the configured chord by polling key state instead of installing a
+/// low-level keyboard hook. WH_KEYBOARD_LL is what keyloggers use and the main
+/// reason dictation utilities get flagged; polling a few keys every 30 ms costs
+/// nothing and keeps the process clean.
 /// </summary>
 public sealed class HotkeyPoller : IDisposable
 {
     private readonly DispatcherTimer _timer;
+    private readonly HotkeyDefinition _definition;
     private bool _isDown;
 
     public event EventHandler? Pressed;
 
     public event EventHandler? Released;
 
-    public HotkeyPoller()
+    public HotkeyPoller(HotkeyDefinition definition)
     {
+        _definition = definition;
+
         _timer = new DispatcherTimer(DispatcherPriority.Input)
         {
             Interval = TimeSpan.FromMilliseconds(30)
@@ -30,8 +32,7 @@ public sealed class HotkeyPoller : IDisposable
 
     private void OnTick(object? sender, EventArgs e)
     {
-        var down = NativeKeyState.IsDown(NativeKeyState.VkControl)
-                   && NativeKeyState.IsDown(NativeKeyState.VkLeftWin);
+        var down = _definition.IsDown();
 
         if (down == _isDown)
         {
@@ -55,15 +56,4 @@ public sealed class HotkeyPoller : IDisposable
         _timer.Stop();
         _timer.Tick -= OnTick;
     }
-}
-
-internal static class NativeKeyState
-{
-    public const int VkControl = 0x11;
-    public const int VkLeftWin = 0x5B;
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
-    public static bool IsDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
 }

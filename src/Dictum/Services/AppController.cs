@@ -17,7 +17,7 @@ public sealed class AppController : IDisposable
     private readonly SettingsStore _store = new();
     private readonly AudioRecorder _recorder = new();
     private readonly TextInjector _injector = new();
-    private readonly HotkeyPoller _hotkey = new();
+    private HotkeyPoller _hotkey;
     private readonly TrayIcon _tray = new();
     private readonly VocabularyStore _vocabularyStore = new();
     private readonly StatsStore _statsStore = new();
@@ -40,9 +40,9 @@ public sealed class AppController : IDisposable
         _corrector = new TermCorrector(_vocabulary);
         _prompt = BuildPrompt();
 
-        _hotkey.Pressed += OnPressed;
-        _hotkey.Released += OnReleased;
+        _hotkey = CreatePoller();
         _tray.SettingsRequested += (_, _) => ShowSettings();
+        _tray.SetupRequested += (_, _) => ShowOnboarding();
         _tray.AboutRequested += (_, _) => ShowAbout();
         _tray.ExitRequested += (_, _) => Application.Current.Shutdown();
     }
@@ -55,8 +55,8 @@ public sealed class AppController : IDisposable
 
         if (string.IsNullOrWhiteSpace(_settings.ModelPath) || !File.Exists(_settings.ModelPath))
         {
-            Log.Write("model missing, opening settings");
-            ShowSettings();
+            Log.Write("model missing, opening onboarding wizard");
+            ShowOnboarding();
         }
     }
 
@@ -72,7 +72,7 @@ public sealed class AppController : IDisposable
 
         try
         {
-            _recorder.Start();
+            _recorder.Start(_settings.AudioDevice);
             ShowIndicator();
         }
         catch (Exception ex)
@@ -220,6 +220,29 @@ public sealed class AppController : IDisposable
         }
     }
 
+    private HotkeyPoller CreatePoller()
+    {
+        var poller = new HotkeyPoller(HotkeyDefinition.Parse(_settings.HotkeyPreset));
+        poller.Pressed += OnPressed;
+        poller.Released += OnReleased;
+        return poller;
+    }
+
+    public void ShowOnboarding()
+    {
+        var wizard = new OnboardingWizard(_settings, _store);
+        if (wizard.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _hotkey.Dispose();
+        _hotkey = CreatePoller();
+        _transcriber?.Dispose();
+        _transcriber = null;
+        Log.Write($"onboarding done: model='{_settings.ModelPath}', hotkey={_settings.HotkeyPreset}, mic={_settings.AudioDevice}");
+    }
+
     public void ShowSettings()
     {
         var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load());        if (window.ShowDialog() != true)
@@ -230,6 +253,9 @@ public sealed class AppController : IDisposable
         _settings = window.Result;
         _store.Save(_settings);
         _cleanups.Clear();
+
+        _hotkey.Dispose();
+        _hotkey = CreatePoller();
 
         _vocabulary = window.ResultTerms;
         _vocabularyStore.Save(_vocabulary);

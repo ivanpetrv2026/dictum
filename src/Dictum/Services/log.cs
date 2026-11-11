@@ -22,6 +22,15 @@ internal static class Log
             lock (Gate)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+
+                // Keep the log bounded: one 2 MB window plus a previous copy.
+                var info = new FileInfo(FilePath);
+                if (info.Exists && info.Length > 2 * 1024 * 1024)
+                {
+                    File.Copy(FilePath, FilePath + ".1", true);
+                    File.WriteAllText(FilePath, string.Empty);
+                }
+
                 File.AppendAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");
             }
         }

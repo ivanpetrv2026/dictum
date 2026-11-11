@@ -11,6 +11,10 @@ public sealed class AppSettings
 
     public string Language { get; set; } = "ru";
 
+    public string HotkeyPreset { get; set; } = "ctrl+win";
+
+    public int AudioDevice { get; set; }
+
     public int MinRecordMs { get; set; } = 300;
 
     public bool LearnEnabled { get; set; } = true;

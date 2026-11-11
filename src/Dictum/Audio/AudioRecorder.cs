@@ -15,7 +15,7 @@ public sealed class AudioRecorder : IDisposable
 
     public bool IsRecording => _waveIn is not null;
 
-    public void Start()
+    public void Start(int deviceNumber = 0)
     {
         if (_waveIn is not null)
         {
@@ -26,6 +26,7 @@ public sealed class AudioRecorder : IDisposable
 
         _waveIn = new WaveInEvent
         {
+            DeviceNumber = deviceNumber < 0 ? 0 : deviceNumber,
             WaveFormat = new WaveFormat(16000, 16, 1),
             BufferMilliseconds = 50,
             NumberOfBuffers = 4

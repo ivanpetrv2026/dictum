@@ -9,6 +9,8 @@ public sealed class TrayIcon : IDisposable
 
     public event EventHandler? SettingsRequested;
 
+    public event EventHandler? SetupRequested;
+
     public event EventHandler? AboutRequested;
 
     public event EventHandler? ExitRequested;
@@ -17,6 +19,7 @@ public sealed class TrayIcon : IDisposable
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Настройки…", null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add("Мастер настройки…", null, (_, _) => SetupRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add("О программе", null, (_, _) => AboutRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));

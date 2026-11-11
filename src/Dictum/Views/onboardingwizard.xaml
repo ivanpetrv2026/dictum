@@ -1,0 +1,75 @@
+<Window x:Class="Dictum.Views.OnboardingWizard"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dictum — первый запуск"
+        Width="720"
+        Height="600"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock x:Name="StepTitle" FontSize="24" FontWeight="Bold" />
+            <TextBlock x:Name="StepHint"
+                       Margin="0,6,0,0"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,22,0,0">
+            <StackPanel x:Name="PanelModel">
+                <TextBlock FontWeight="SemiBold" Text="Модель распознавания" />
+                <ComboBox x:Name="ModelBox" Margin="0,8,0,0">
+                    <ComboBoxItem Content="large-v3-turbo — лучшее качество, 1,6 ГБ" Tag="ggml-large-v3-turbo.bin" />
+                    <ComboBoxItem Content="medium — хорошее качество, 1,5 ГБ" Tag="ggml-medium.bin" />
+                    <ComboBoxItem Content="small — быстрее, 488 МБ" Tag="ggml-small.bin" />
+                    <ComboBoxItem Content="base — самый лёгкий, 148 МБ" Tag="ggml-base.bin" />
+                </ComboBox>
+
+                <TextBlock Margin="0,10,0,0"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Text="Модель скачивается с Hugging Face один раз и дальше работает полностью офлайн." />
+
+                <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
+                    <Button x:Name="PickFileButton" Width="190" Content="Указать файл вручную…" Click="OnPickFile" />
+                </StackPanel>
+
+                <ProgressBar x:Name="ModelProgress" Height="8" Margin="0,16,0,0" Visibility="Collapsed" />
+                <TextBlock x:Name="ModelStatus" Margin="0,8,0,0" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" />
+                <TextBlock x:Name="ModelPathText" Margin="0,12,0,0" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel x:Name="PanelHotkey" Visibility="Collapsed">
+                <TextBlock FontWeight="SemiBold" Text="Комбинация для диктовки" />
+                <ComboBox x:Name="HotkeyBox" Width="260" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                <TextBlock Margin="0,12,0,0"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Text="Удерживай комбинацию и говори. Отпусти — текст напечатается в активное окно. Приложение не ставит хук клавиатуры: оно опрашивает состояние клавиш, поэтому не выглядит для антивируса как кейлоггер." />
+            </StackPanel>
+
+            <StackPanel x:Name="PanelMic" Visibility="Collapsed">
+                <TextBlock FontWeight="SemiBold" Text="Микрофон" />
+                <ComboBox x:Name="MicBox" Width="360" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                <Button x:Name="MicTestButton" Width="200" Margin="0,14,0,0" HorizontalAlignment="Left" Content="Проверить микрофон" Click="OnMicTest" />
+                <ProgressBar x:Name="MicProgress" Height="6" Margin="0,10,0,0" Visibility="Collapsed" />
+                <TextBlock x:Name="MicStatus" Margin="0,8,0,0" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,14,0,0"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Text="Нажми «Проверить» и скажи пару слов — покажем уровень сигнала." />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,20,0,0">
+            <Button x:Name="BackButton" Width="110" HorizontalAlignment="Left" Content="Назад" Click="OnBack" />
+            <Button x:Name="NextButton" Width="170" HorizontalAlignment="Right" Content="Далее" Style="{StaticResource PrimaryButton}" Click="OnNext" />
+        </Grid>
+    </Grid>
+</Window>
