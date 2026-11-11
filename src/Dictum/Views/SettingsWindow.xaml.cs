@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Dictum.Settings;
+using Dictum.Vocabulary;
 using Microsoft.Win32;
 
 namespace Dictum.Views;
@@ -8,13 +9,24 @@ namespace Dictum.Views;
 public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
+    private readonly List<VocabularyTerm> _originalTerms;
 
-    public SettingsWindow(AppSettings settings)
+    public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms)
     {
         InitializeComponent();
+
         _settings = settings;
+        _originalTerms = terms
+            .Select(term => new VocabularyTerm
+            {
+                Canonical = term.Canonical,
+                Variants = new List<string>(term.Variants)
+            })
+            .ToList();
 
         ModelPathBox.Text = settings.ModelPath;
+        LearnBox.IsChecked = settings.LearnEnabled;
+        TermsBox.Text = FormatTerms(_originalTerms);
 
         foreach (ComboBoxItem item in LanguageBox.Items)
         {
@@ -29,6 +41,66 @@ public partial class SettingsWindow : Window
     }
 
     public AppSettings Result => _settings;
+
+    public List<VocabularyTerm> ResultTerms { get; private set; } = new();
+
+    private static string FormatTerms(IEnumerable<VocabularyTerm> terms) =>
+        string.Join(
+            Environment.NewLine,
+            terms.Select(term => term.Variants.Count == 0
+                ? term.Canonical
+                : $"{term.Canonical} | {string.Join(", ", term.Variants)}"));
+
+    private List<VocabularyTerm> ParseTerms(string text)
+    {
+        var known = _originalTerms.ToDictionary(
+            term => TermCorrector.Normalize(term.Canonical),
+            term => term,
+            StringComparer.Ordinal);
+
+        var parsed = new List<VocabularyTerm>();
+
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var parts = line.Split('|', 2);
+            var canonical = parts[0].Trim();
+            if (canonical.Length == 0)
+            {
+                continue;
+            }
+
+            var variants = new List<string>();
+            if (parts.Length == 2)
+            {
+                variants.AddRange(parts[1]
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(value => value.Trim())
+                    .Where(value => value.Length > 0));
+            }
+
+            // Keep variants learned while the app was running.
+            if (known.TryGetValue(TermCorrector.Normalize(canonical), out var existing))
+            {
+                foreach (var variant in existing.Variants)
+                {
+                    if (!variants.Any(v => string.Equals(TermCorrector.Normalize(v), TermCorrector.Normalize(variant), StringComparison.Ordinal)))
+                    {
+                        variants.Add(variant);
+                    }
+                }
+            }
+
+            parsed.Add(new VocabularyTerm { Canonical = canonical, Variants = variants });
+        }
+
+        return parsed;
+    }
 
     private void OnBrowse(object sender, RoutedEventArgs e)
     {
@@ -48,6 +120,9 @@ public partial class SettingsWindow : Window
     {
         _settings.ModelPath = ModelPathBox.Text.Trim();
         _settings.Language = (LanguageBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "ru";
+        _settings.LearnEnabled = LearnBox.IsChecked == true;
+
+        ResultTerms = ParseTerms(TermsBox.Text);
         DialogResult = true;
     }
 

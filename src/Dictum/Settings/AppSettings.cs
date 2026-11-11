@@ -12,4 +12,6 @@ public sealed class AppSettings
     public string Language { get; set; } = "ru";
 
     public int MinRecordMs { get; set; } = 300;
+
+    public bool LearnEnabled { get; set; } = true;
 }

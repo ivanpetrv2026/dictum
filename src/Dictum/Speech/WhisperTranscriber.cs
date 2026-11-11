@@ -12,8 +12,9 @@ public sealed class WhisperTranscriber : IDisposable
 {
     private readonly WhisperFactory _factory;
     private readonly string _language;
+    private readonly string? _prompt;
 
-    public WhisperTranscriber(string modelPath, string language)
+    public WhisperTranscriber(string modelPath, string language, string? prompt = null)
     {
         if (!File.Exists(modelPath))
         {
@@ -22,6 +23,7 @@ public sealed class WhisperTranscriber : IDisposable
 
         _factory = WhisperFactory.FromPath(modelPath);
         _language = string.IsNullOrWhiteSpace(language) ? "auto" : language;
+        _prompt = string.IsNullOrWhiteSpace(prompt) ? null : prompt;
     }
 
     public async Task<string> TranscribeAsync(byte[] pcm16KhzMono, CancellationToken cancellationToken = default)
@@ -31,9 +33,14 @@ public sealed class WhisperTranscriber : IDisposable
             return string.Empty;
         }
 
-        using var processor = _factory.CreateBuilder()
-            .WithLanguage(_language)
-            .Build();
+        var builder = _factory.CreateBuilder().WithLanguage(_language);
+        if (_prompt is not null)
+        {
+            // Biases the decoder towards the dictionary spellings (ClickHouse, API, Jira...).
+            builder = builder.WithPrompt(_prompt);
+        }
+
+        using var processor = builder.Build();
 
         using var stream = WrapAsWav(pcm16KhzMono);
         var text = new StringBuilder();
