@@ -27,6 +27,7 @@ OutputBaseFilename=Dictum_{#AppVersion}_x64_setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\src\Dictum\app.ico
 ; Per-user install: no UAC prompt, no machine-wide changes.
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible

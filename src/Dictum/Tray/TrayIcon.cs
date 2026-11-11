@@ -21,9 +21,11 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
 
+        var appIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? string.Empty);
+
         _icon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = appIcon ?? SystemIcons.Application,
             Text = "Dictum — локальная диктовка",
             Visible = true,
             ContextMenuStrip = menu

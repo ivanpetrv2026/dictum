@@ -83,25 +83,33 @@ public partial class SettingsWindow : Window
 
     private void UpdateDashboard()
     {
-        DashProviderText.Text =
-            $"Шлюз: {ProviderName(_settings.AiProvider)} · {_settings.AiModel}"
-            + (_settings.AiFallbackEnabled ? $"   |   резерв: Gemini · {_settings.AiFallbackModel}" : string.Empty);
+        var version = typeof(Dictum.App).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        DashSubtitle.Text = $"Локальная диктовка · v{version} · {_originalTerms.Count} терминов";
 
-        var keys = Providers
-            .Select(provider =>
-            {
-                var key = AiCleanup.ResolveKey(provider.Tag);
-                return $"{provider.Name}: {(string.IsNullOrWhiteSpace(key) ? "—" : "✓")}";
-            });
+        DashToday.Text = _stats.Today.ToString();
+        DashTotal.Text = _stats.Total.ToString();
+        DashGateway.Text = ProviderName(_settings.AiProvider);
 
-        DashKeysText.Text = "Ключи: " + string.Join("   ", keys);
-        DashStatsText.Text = $"Диктовок сегодня: {_stats.Today}   ·   всего: {_stats.Total}";
+        var keys = Providers.Select(provider =>
+        {
+            var key = AiCleanup.ResolveKey(provider.Tag);
+            return $"{provider.Name} {(string.IsNullOrWhiteSpace(key) ? "—" : "✓")}";
+        });
+
+        var line = string.Join("     ", keys);
+        if (_settings.AiFallbackEnabled)
+        {
+            var geminiKey = AiCleanup.ResolveKey("gemini");
+            line += $"     ·     резерв Gemini {(string.IsNullOrWhiteSpace(geminiKey) ? "—" : "✓")}";
+        }
+
+        DashKeysText.Text = line;
 
         DashRecentText.Text = _stats.Recent.Count == 0
-            ? "Пока пусто."
+            ? "Пока пусто — продиктуй первую фразу."
             : string.Join(
                 Environment.NewLine,
-                _stats.Recent.Take(5).Select(entry => $"{entry.Time:HH:mm} — {entry.Text}"));
+                _stats.Recent.Take(5).Select(entry => $"{entry.Time:HH:mm}   {entry.Text}"));
     }
 
     private static string FormatTerms(IEnumerable<VocabularyTerm> terms) =>

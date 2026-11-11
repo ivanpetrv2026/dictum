@@ -85,10 +85,14 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
+      - name: Portable archive
+        shell: pwsh
+        run: Compress-Archive -Path publish\* -DestinationPath "artifacts\Dictum_${{ github.ref_name }}_portable.zip" -CompressionLevel Optimal
+
       - name: Checksums
         shell: pwsh
         run: |
-          Get-ChildItem artifacts -Filter *.exe | ForEach-Object {
+          Get-ChildItem artifacts -Include *.exe,*.zip -File | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
             "$hash  $($_.Name)"
           } | Set-Content artifacts/SHA256SUMS.txt -Encoding utf8
@@ -134,5 +138,6 @@ jobs:
         with:
           files: |
             artifacts/*.exe
+            artifacts/*.zip
             artifacts/SHA256SUMS.txt
           generate_release_notes: true
