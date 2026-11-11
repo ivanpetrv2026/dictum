@@ -2,6 +2,7 @@ using System.Threading;
 using System.Windows;
 using Dictum.Services;
 using Dictum.Settings;
+using Dictum.Views;
 
 namespace Dictum;
 
@@ -13,6 +14,23 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (e.Args.Contains("--indicator-test"))
+        {
+            var indicator = new RecordingIndicator();
+            indicator.PlaceNearBottom();
+            indicator.Show();
+
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                indicator.Close();
+                Shutdown();
+            };
+            timer.Start();
+            return;
+        }
 
         if (e.Args.Contains("--ai-test"))
         {

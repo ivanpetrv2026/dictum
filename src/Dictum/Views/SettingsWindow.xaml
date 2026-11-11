@@ -17,7 +17,7 @@
                     <StackPanel Margin="16">
                         <TextBlock Text="Состояние" FontSize="18" FontWeight="Bold" />
 
-                        <Border Margin="0,10,0,0" Padding="14" Background="#F5F5F7" CornerRadius="6">
+                        <Border Margin="0,10,0,0" Padding="16" Background="{StaticResource SurfaceBrush}" CornerRadius="10">
                             <StackPanel>
                                 <TextBlock x:Name="DashProviderText" FontSize="14" TextWrapping="Wrap" />
                                 <TextBlock x:Name="DashKeysText" Margin="0,8,0,0" Foreground="#444" TextWrapping="Wrap" />
@@ -26,7 +26,7 @@
                         </Border>
 
                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                            <Button x:Name="TestButton" Width="150" Content="Проверить связь" Click="OnTestClick" />
+                            <Button x:Name="TestButton" Width="160" Content="Проверить связь" Style="{StaticResource PrimaryButton}" Click="OnTestClick" />
                             <TextBlock x:Name="TestResultText"
                                        Margin="12,0,0,0"
                                        MaxWidth="500"
@@ -94,7 +94,7 @@
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" />
 
-                        <Border Grid.Row="6" Margin="0,14,0,0" Padding="12" Background="#F5F5F7" CornerRadius="6">
+                        <Border Grid.Row="6" Margin="0,14,0,0" Padding="14" Background="{StaticResource SurfaceBrush}" CornerRadius="10">
                             <StackPanel>
                                 <CheckBox x:Name="AiBox" FontWeight="SemiBold" Content="ИИ-очистка текста через шлюз" />
                                 <TextBlock Margin="0,6,0,0"
@@ -158,7 +158,7 @@
 
         <StackPanel Grid.Row="1" Margin="0,12,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
             <Button Width="100" Margin="0,0,8,0" Content="Отмена" Click="OnCancel" />
-            <Button Width="110" Content="Сохранить" IsDefault="True" Click="OnSave" />
+            <Button Width="110" Content="Сохранить" IsDefault="True" Style="{StaticResource PrimaryButton}" Click="OnSave" />
         </StackPanel>
     </Grid>
 </Window>

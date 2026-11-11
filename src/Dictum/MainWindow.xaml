@@ -2,17 +2,47 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="О программе"
-        Height="280"
-        Width="480"
+        Height="320"
+        Width="520"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize">
-    <StackPanel Margin="24">
-        <TextBlock Text="Dictum" FontSize="26" FontWeight="Bold" />
-        <TextBlock Margin="0,4,0,18"
-                   Foreground="#666"
-                   Text="Локальная диктовка на Whisper. Без облака, без глобального хука клавиатуры." 
-                   TextWrapping="Wrap" />
-        <TextBlock Text="Версия 0.3.0" />
-        <TextBlock Margin="0,6,0,0" Foreground="#666" Text="Лицензия MIT" />
-    </StackPanel>
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <Ellipse Width="34" Height="34" Fill="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="26" FontWeight="Bold" Text="Dictum" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="1"
+                   Margin="0,14,0,0"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   TextWrapping="Wrap"
+                   Text="Локальная диктовка на Whisper. Без облака, без глобального хука клавиатуры и без доступа к буферу обмена." />
+
+        <Border Grid.Row="2"
+                Margin="0,18,0,0"
+                Padding="14"
+                VerticalAlignment="Top"
+                Background="{StaticResource SurfaceBrush}"
+                CornerRadius="10">
+            <StackPanel>
+                <TextBlock Text="Удерживай Ctrl+Win и говори." FontWeight="SemiBold" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           TextWrapping="Wrap"
+                           Text="Отпусти — текст напечатается в активное окно. Настройки и словарь терминов — на панели управления." />
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal">
+            <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="Версия 0.3.1" />
+            <TextBlock Margin="16,0,0,0" Foreground="{StaticResource TextMutedBrush}" Text="MIT" />
+        </StackPanel>
+    </Grid>
 </Window>

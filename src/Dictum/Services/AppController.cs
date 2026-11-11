@@ -28,6 +28,7 @@ public sealed class AppController : IDisposable
     private readonly Dictionary<string, AiCleanup> _cleanups = new();
     private AppSettings _settings;
     private WhisperTranscriber? _transcriber;
+    private RecordingIndicator? _indicator;
     private nint _targetWindow;
     private DateTime _recordedAt;
     private bool _busy;
@@ -68,13 +69,26 @@ public sealed class AppController : IDisposable
 
         _targetWindow = _injector.CaptureTarget();
         _recordedAt = DateTime.UtcNow;
-        _recorder.Start();
+
+        try
+        {
+            _recorder.Start();
+            ShowIndicator();
+        }
+        catch (Exception ex)
+        {
+            Log.Write("record start failed: " + ex.Message);
+            HideIndicator();
+            return;
+        }
+
         Log.Write($"press, target=0x{_targetWindow.ToInt64():X}");
     }
 
     private async void OnReleased(object? sender, EventArgs e)
     {
         var pcm = _recorder.Stop();
+        HideIndicator();
         var elapsed = (DateTime.UtcNow - _recordedAt).TotalMilliseconds;
         Log.Write($"release, bytes={pcm.Length}, duration={elapsed:F0}ms");
 
@@ -171,6 +185,39 @@ public sealed class AppController : IDisposable
         RuntimeOptions.RuntimeLibraryOrder = new List<RuntimeLibrary> { RuntimeLibrary.Cpu };
         Log.Write("asr runtime: cpu");
         return new WhisperTranscriber(_settings.ModelPath, _settings.Language, _prompt);
+    }
+
+    private void ShowIndicator()
+    {
+        try
+        {
+            _indicator ??= new RecordingIndicator();
+            _indicator.PlaceNearBottom();
+
+            if (!_indicator.IsVisible)
+            {
+                _indicator.Show();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("indicator failed: " + ex.Message);
+        }
+    }
+
+    private void HideIndicator()
+    {
+        try
+        {
+            if (_indicator is { IsVisible: true })
+            {
+                _indicator.Hide();
+            }
+        }
+        catch (Exception)
+        {
+            // Indicator is cosmetic; never let it break dictation.
+        }
     }
 
     public void ShowSettings()
@@ -378,6 +425,7 @@ public sealed class AppController : IDisposable
         _hotkey.Dispose();
         _recorder.Dispose();
         _transcriber?.Dispose();
+        _indicator?.Close();
         _tray.Dispose();
     }
 }
