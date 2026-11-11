@@ -10,9 +10,13 @@ namespace Dictum.Services;
 internal static class CredentialManager
 {
     private const int CredTypeGeneric = 1;
+    private const int CredPersistLocalMachine = 2;
 
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CredRead(string target, int type, int reservedFlag, out IntPtr credentialPtr);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CredWrite(ref Credential credential, uint flags);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern void CredFree(IntPtr cred);
@@ -78,4 +82,46 @@ internal static class CredentialManager
 
     private static bool IsAscii(string value) =>
         value.Length > 0 && value.All(ch => ch >= 32 && ch < 127);
+
+    /// <summary>
+    /// Stores a secret in Windows Credential Manager. The blob is encrypted by
+    /// DPAPI and never written to settings.json or the log.
+    /// </summary>
+    public static bool Write(string target, string secret, string userName = "dictum")
+    {
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            return false;
+        }
+
+        var bytes = Encoding.Unicode.GetBytes(secret);
+        var blob = Marshal.AllocHGlobal(bytes.Length);
+
+        try
+        {
+            Marshal.Copy(bytes, 0, blob, bytes.Length);
+
+            var credential = new Credential
+            {
+                Type = CredTypeGeneric,
+                TargetName = target,
+                CredentialBlobSize = bytes.Length,
+                CredentialBlob = blob,
+                Persist = CredPersistLocalMachine,
+                UserName = userName
+            };
+
+            if (!CredWrite(ref credential, 0))
+            {
+                Log.Write($"credman: write '{target}' failed, win32={Marshal.GetLastWin32Error()}");
+                return false;
+            }
+
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(blob);
+        }
+    }
 }

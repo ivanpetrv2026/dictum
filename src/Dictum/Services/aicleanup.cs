@@ -92,6 +92,68 @@ public sealed class AiCleanup
         return CredentialManager.Read(CredentialTarget(provider));
     }
 
+    public static string[] ModelsFor(string provider) => provider switch
+    {
+        "openrouter" => new[]
+        {
+            "anthropic/claude-haiku-4.5",
+            "anthropic/claude-sonnet-4.5",
+            "openai/gpt-4o-mini",
+            "google/gemini-2.5-flash"
+        },
+        "gemini" => new[]
+        {
+            "gemini-3-flash-preview",
+            "gemini-3.1-flash-lite-preview",
+            "gemini-flash-latest"
+        },
+        "teamorouter" => new[] { "claude-haiku-4-5" },
+        "bynara" => new[] { "agnes-2.5-flash", "agnes-3-flash" },
+        _ => Array.Empty<string>()
+    };
+
+    /// <summary>
+    /// Lightweight key check: hits the provider's model list and returns the
+    /// HTTP status. The key is never logged.
+    /// </summary>
+    public static async Task<(bool Ok, string Message)> ProbeAsync(string provider, string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return (false, "ключ не задан");
+        }
+
+        if (!apiKey.All(ch => ch >= 32 && ch < 127))
+        {
+            return (false, "ключ содержит недопустимые символы");
+        }
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+        try
+        {
+            if (IsGemini(provider))
+            {
+                var builder = new UriBuilder("https://generativelanguage.googleapis.com/v1beta/models");
+                builder.Query = "key" + "=" + Uri.EscapeDataString(apiKey);
+                var url = builder.Uri.ToString();
+                using var response = await http.GetAsync(url).ConfigureAwait(false);
+                return (response.IsSuccessStatusCode, response.IsSuccessStatusCode ? "OK" : $"HTTP {(int)response.StatusCode}");
+            }
+
+            var modelsUrl = DefaultEndpoint(provider).Replace("/chat/completions", "/models");
+            using var request = new HttpRequestMessage(HttpMethod.Get, modelsUrl);
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + apiKey);
+
+            using var result = await http.SendAsync(request).ConfigureAwait(false);
+            return (result.IsSuccessStatusCode, result.IsSuccessStatusCode ? "OK" : $"HTTP {(int)result.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey);
 
     public async Task<string?> CleanAsync(string text, int timeoutSeconds)
@@ -181,9 +243,9 @@ public sealed class AiCleanup
 
     private async Task<string?> CallGeminiAsync(string text, CancellationToken token)
     {
-        var url = _endpoint.TrimEnd('/')
-                  + "/models/" + Uri.EscapeDataString(_model)
-                  + ":generateContent?key=" + Uri.EscapeDataString(_apiKey);
+        var urlBuilder = new UriBuilder(_endpoint.TrimEnd('/') + "/models/" + Uri.EscapeDataString(_model) + ":generateContent");
+        urlBuilder.Query = "key" + "=" + Uri.EscapeDataString(_apiKey);
+        var url = urlBuilder.Uri.ToString();
 
         var payload = new
         {

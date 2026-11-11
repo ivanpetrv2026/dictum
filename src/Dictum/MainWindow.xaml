@@ -41,7 +41,7 @@
         </Border>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal">
-            <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="Версия 0.6.0" />
+            <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="Версия 0.7.0" />
             <TextBlock Margin="16,0,0,0" Foreground="{StaticResource TextMutedBrush}" Text="MIT" />
         </StackPanel>
     </Grid>

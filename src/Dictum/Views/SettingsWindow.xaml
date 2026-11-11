@@ -86,6 +86,19 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="Ключи">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+                        <TextBlock FontSize="18" FontWeight="Bold" Text="Ключи API" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Ключи хранятся в Windows Credential Manager: шифрование DPAPI, привязка к учётной записи, в settings.json и в логах их нет. Поле ввода никогда не показывает сохранённый ключ — только статус. Проверка обращения к шлюзу засчитывается по списку моделей." />
+                        <StackPanel x:Name="KeysPanel" Margin="0,16,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Настройки">                <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid Margin="20">
                         <Grid.RowDefinitions>
@@ -163,8 +176,7 @@
                                         <ComboBoxItem Content="Другой" Tag="custom" />
                                     </ComboBox>
                                     <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0,8,0" Text="Модель:" />
-                                    <TextBox x:Name="AiModelBox" Grid.Column="3" />
-                                </Grid>
+                                    <ComboBox x:Name="AiModelBox" Grid.Column="3" IsEditable="True" />                                </Grid>
 
                                 <Grid Margin="0,6,0,0">
                                     <Grid.ColumnDefinitions>

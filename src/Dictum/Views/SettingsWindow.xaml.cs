@@ -47,6 +47,8 @@ public partial class SettingsWindow : Window
         AiBaseUrlBox.Text = settings.AiBaseUrl;
         AiFallbackBox.IsChecked = settings.AiFallbackEnabled;
         AiFallbackModelBox.Text = settings.AiFallbackModel;
+        AiModelBox.ItemsSource = AiCleanup.ModelsFor(settings.AiProvider);
+        AiModelBox.Text = settings.AiModel;
         TermsBox.Text = FormatTerms(_originalTerms);
 
         foreach (ComboBoxItem item in AiProviderBox.Items)
@@ -74,6 +76,7 @@ public partial class SettingsWindow : Window
         _initializing = false;
         UpdateDashboard();
         BuildModelsList();
+        BuildKeysList();
     }
 
     public AppSettings Result => _settings;
@@ -112,6 +115,106 @@ public partial class SettingsWindow : Window
             : string.Join(
                 Environment.NewLine,
                 _stats.Recent.Take(5).Select(entry => $"{entry.Time:HH:mm}   {entry.Text}"));
+    }
+
+    private sealed class KeyRow
+    {
+        public string Provider { get; init; } = string.Empty;
+
+        public PasswordBox Box { get; init; } = null!;
+
+        public TextBlock Status { get; init; } = null!;
+    }
+
+    private void BuildKeysList()
+    {
+        KeysPanel.Children.Clear();
+        var muted = (System.Windows.Media.Brush)FindResource("TextMutedBrush");
+
+        foreach (var provider in Providers)
+        {
+            var target = AiCleanup.CredentialTarget(provider.Tag);
+            var hasKey = !string.IsNullOrWhiteSpace(CredentialManager.Read(target));
+
+            var box = new PasswordBox { Width = 320, Height = 30, Padding = new Thickness(6, 4, 6, 4) };
+            var status = new TextBlock { Foreground = muted, FontSize = 12, Margin = new Thickness(0, 6, 0, 0) };
+            var row = new KeyRow { Provider = provider.Tag, Box = box, Status = status };
+
+            var save = new Button { Width = 110, Margin = new Thickness(8, 0, 0, 0), Content = "Сохранить", Tag = row };
+            save.Click += OnSaveKey;
+
+            var check = new Button { Width = 110, Margin = new Thickness(8, 0, 0, 0), Content = "Проверить", Tag = row };
+            check.Click += OnCheckKey;
+
+            var inputRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            inputRow.Children.Add(box);
+            inputRow.Children.Add(save);
+            inputRow.Children.Add(check);
+
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock { Text = provider.Name, FontWeight = FontWeights.SemiBold, FontSize = 14 });
+            stack.Children.Add(new TextBlock
+            {
+                Text = hasKey ? "ключ сохранён в Credential Manager" : "ключ не задан",
+                Foreground = muted,
+                FontSize = 12,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            stack.Children.Add(inputRow);
+            stack.Children.Add(status);
+
+            KeysPanel.Children.Add(new Border
+            {
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 0, 0, 8),
+                Background = (System.Windows.Media.Brush)FindResource("SurfaceBrush"),
+                CornerRadius = new CornerRadius(10),
+                Child = stack
+            });
+        }
+    }
+
+    private void OnSaveKey(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not KeyRow row)
+        {
+            return;
+        }
+
+        var key = row.Box.Password.Trim();
+        if (key.Length == 0)
+        {
+            row.Status.Text = "Введите ключ.";
+            return;
+        }
+
+        var saved = CredentialManager.Write(AiCleanup.CredentialTarget(row.Provider), key);
+        row.Status.Text = saved
+            ? "Ключ сохранён. Нажмите «Сохранить» внизу, чтобы применить."
+            : "Не удалось сохранить ключ (см. dictum.log).";
+
+        if (saved)
+        {
+            row.Box.Clear();
+        }
+    }
+
+    private async void OnCheckKey(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is not KeyRow row)
+        {
+            return;
+        }
+
+        var key = row.Box.Password.Trim();
+        if (key.Length == 0)
+        {
+            key = CredentialManager.Read(AiCleanup.CredentialTarget(row.Provider)) ?? string.Empty;
+        }
+
+        row.Status.Text = "Проверяю…";
+        var (ok, message) = await AiCleanup.ProbeAsync(row.Provider, key);
+        row.Status.Text = ok ? "Шлюз ответил — ключ рабочий." : "Ошибка: " + message;
     }
 
     private void BuildModelsList()
@@ -336,6 +439,9 @@ public partial class SettingsWindow : Window
         }
 
         AiBaseUrlBox.Text = AiCleanup.DefaultEndpoint(provider);
+
+        var models = AiCleanup.ModelsFor(provider);
+        AiModelBox.ItemsSource = models;
         AiModelBox.Text = AiCleanup.DefaultModel(provider);
     }
 
