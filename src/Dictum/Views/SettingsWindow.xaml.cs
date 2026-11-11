@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Dictum.Services;
 using Dictum.Settings;
 using Dictum.Vocabulary;
 using Microsoft.Win32;
@@ -10,10 +11,12 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly List<VocabularyTerm> _originalTerms;
+    private readonly bool _initializing;
 
     public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms)
     {
         InitializeComponent();
+        _initializing = true;
 
         _settings = settings;
         _originalTerms = terms
@@ -28,7 +31,19 @@ public partial class SettingsWindow : Window
         LearnBox.IsChecked = settings.LearnEnabled;
         AiBox.IsChecked = settings.AiEnabled;
         AiModelBox.Text = settings.AiModel;
+        AiBaseUrlBox.Text = settings.AiBaseUrl;
         TermsBox.Text = FormatTerms(_originalTerms);
+
+        foreach (ComboBoxItem item in AiProviderBox.Items)
+        {
+            if (string.Equals(item.Tag as string, settings.AiProvider, StringComparison.OrdinalIgnoreCase))
+            {
+                AiProviderBox.SelectedItem = item;
+                break;
+            }
+        }
+
+        AiProviderBox.SelectedItem ??= AiProviderBox.Items[0];
 
         foreach (ComboBoxItem item in LanguageBox.Items)
         {
@@ -40,6 +55,8 @@ public partial class SettingsWindow : Window
         }
 
         LanguageBox.SelectedItem ??= LanguageBox.Items[0];
+
+        _initializing = false;
     }
 
     public AppSettings Result => _settings;
@@ -86,7 +103,6 @@ public partial class SettingsWindow : Window
                     .Where(value => value.Length > 0));
             }
 
-            // Keep variants learned while the app was running.
             if (known.TryGetValue(TermCorrector.Normalize(canonical), out var existing))
             {
                 foreach (var variant in existing.Variants)
@@ -102,6 +118,22 @@ public partial class SettingsWindow : Window
         }
 
         return parsed;
+    }
+
+    private void OnProviderChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing)
+        {
+            return;
+        }
+
+        var provider = (AiProviderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "openrouter";
+        if (provider == "custom")
+        {
+            return;
+        }
+
+        AiBaseUrlBox.Text = AiCleanup.DefaultEndpoint(provider);
     }
 
     private void OnBrowse(object sender, RoutedEventArgs e)
@@ -124,9 +156,13 @@ public partial class SettingsWindow : Window
         _settings.Language = (LanguageBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "ru";
         _settings.LearnEnabled = LearnBox.IsChecked == true;
         _settings.AiEnabled = AiBox.IsChecked == true;
+        _settings.AiProvider = (AiProviderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "openrouter";
         _settings.AiModel = string.IsNullOrWhiteSpace(AiModelBox.Text)
             ? "anthropic/claude-haiku-4.5"
             : AiModelBox.Text.Trim();
+        _settings.AiBaseUrl = string.IsNullOrWhiteSpace(AiBaseUrlBox.Text)
+            ? AiCleanup.DefaultEndpoint(_settings.AiProvider)
+            : AiBaseUrlBox.Text.Trim();
 
         ResultTerms = ParseTerms(TermsBox.Text);
         DialogResult = true;

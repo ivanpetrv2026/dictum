@@ -101,8 +101,9 @@ Dictum.exe --selftest
 
 Дополнительный слой поверх словаря: пунктуация, заглавные буквы, удаление оговорок и слов-паразитов. Выключен по умолчанию.
 
-- Провайдер — OpenRouter, модель по умолчанию `anthropic/claude-haiku-4.5`.
-- Ключ читается из `OPENROUTER_API_KEY` или из Credential Manager (цель `Dictum/openrouter`).
+- Провайдер — OpenRouter, OrcaRouter, TeamRouter или свой endpoint; выбор и базовый URL задаются в настройках.
+- Модель по умолчанию для OpenRouter — `anthropic/claude-haiku-4.5`. У TeamRouter имена другие (`claude-haiku-4-5`), их можно посмотреть в `/v1/models` шлюза.
+- Ключ читается из переменных `OPENROUTER_API_KEY`, `ORCAROUTER_API_KEY`, `TEAMOROUTER_API_KEY` или из Credential Manager (`Dictum/openrouter`, `Dictum/orcarouter`, `Dictum/teamorouter`).
 - Запрос идёт только на `api.openrouter.ai` по HTTPS, только с текстом текущей диктовки.
 - Таймаут 8 секунд; при любой ошибке вставляется текст после локальной коррекции.
 

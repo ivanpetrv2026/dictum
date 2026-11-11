@@ -12,7 +12,7 @@
                    Foreground="#666"
                    Text="Локальная диктовка на Whisper. Без облака, без глобального хука клавиатуры." 
                    TextWrapping="Wrap" />
-        <TextBlock Text="Версия 0.2.1" />
+        <TextBlock Text="Версия 0.2.2" />
         <TextBlock Margin="0,6,0,0" Foreground="#666" Text="Лицензия MIT" />
     </StackPanel>
 </Window>

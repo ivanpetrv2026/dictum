@@ -199,7 +199,10 @@ public sealed class AppController : IDisposable
             return text;
         }
 
-        _ai ??= new AiCleanup(AiCleanup.ResolveKey() ?? string.Empty, _settings.AiModel);
+        _ai ??= new AiCleanup(
+            AiCleanup.ResolveKey(_settings.AiProvider) ?? string.Empty,
+            _settings.AiModel,
+            _settings.AiBaseUrl);
 
         if (!_ai.IsConfigured)
         {

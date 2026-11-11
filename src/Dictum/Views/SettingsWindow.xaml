@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Dictum — настройки"
-        Height="660"
-        Width="720"
+        Height="700"
+        Width="740"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -66,18 +66,37 @@
 
         <Border Grid.Row="6" Margin="0,14,0,0" Padding="12" Background="#F5F5F7" CornerRadius="6">
             <StackPanel>
-                <CheckBox x:Name="AiBox" FontWeight="SemiBold" Content="ИИ-очистка текста через OpenRouter" />
+                <CheckBox x:Name="AiBox" FontWeight="SemiBold" Content="ИИ-очистка текста через шлюз" />
                 <TextBlock Margin="0,6,0,0"
                            Foreground="#555"
                            TextWrapping="Wrap"
-                           Text="Выключено по умолчанию. При включении распознанный текст одной диктовки уходит по HTTPS на api.openrouter.ai и возвращается с расставленными знаками препинания. Других сетевых соединений приложение не делает." />
-                <Grid Margin="0,8,0,0">
+                           Text="Выключено по умолчанию. При включении распознанный текст одной диктовки уходит по HTTPS на выбранный шлюз и возвращается с расставленными знаками препинания. Других сетевых соединений приложение не делает." />
+
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Шлюз:" />
+                    <ComboBox x:Name="AiProviderBox" Grid.Column="1" SelectionChanged="OnProviderChanged">
+                        <ComboBoxItem Content="OpenRouter" Tag="openrouter" />
+                        <ComboBoxItem Content="OrcaRouter" Tag="orcarouter" />
+                        <ComboBoxItem Content="TeamRouter" Tag="teamorouter" />
+                        <ComboBoxItem Content="Другой" Tag="custom" />
+                    </ComboBox>
+                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0,8,0" Text="Модель:" />
+                    <TextBox x:Name="AiModelBox" Grid.Column="3" Padding="4" VerticalContentAlignment="Center" />
+                </Grid>
+
+                <Grid Margin="0,6,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Модель:" />
-                    <TextBox x:Name="AiModelBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Endpoint:" />
+                    <TextBox x:Name="AiBaseUrlBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
                 </Grid>
             </StackPanel>
         </Border>
@@ -92,7 +111,7 @@
                    Margin="0,0,0,10"
                    Foreground="#666"
                    TextWrapping="Wrap"
-                   Text="Ключ OpenRouter берётся из переменной окружения OPENROUTER_API_KEY или из хранилища учётных данных Windows (цель Dictum/openrouter)." />
+                   Text="Ключ берётся из переменной окружения (OPENROUTER_API_KEY / ORCAROUTER_API_KEY / TEAMOROUTER_API_KEY) или из хранилища учётных данных Windows: Dictum/openrouter, Dictum/orcarouter, Dictum/teamorouter." />
 
         <StackPanel Grid.Row="9" HorizontalAlignment="Right" Orientation="Horizontal">
             <Button Width="100" Margin="0,0,8,0" Content="Отмена" Click="OnCancel" />

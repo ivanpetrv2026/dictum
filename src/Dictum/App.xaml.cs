@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Windows;
 using Dictum.Services;
+using Dictum.Settings;
 
 namespace Dictum;
 
@@ -23,7 +24,15 @@ public partial class App : System.Windows.Application
                     ? e.Args[index + 1]
                     : "привет это тест пунктуации и очистки текста мы используем click house и github";
 
-                var cleanup = new AiCleanup(AiCleanup.ResolveKey() ?? string.Empty, "anthropic/claude-haiku-4.5");
+                var settings = new SettingsStore().Load();
+                var cleanup = new AiCleanup(
+                    AiCleanup.ResolveKey(settings.AiProvider) ?? string.Empty,
+                    settings.AiModel,
+                    settings.AiBaseUrl);
+
+                output.AppendLine("provider: " + settings.AiProvider);
+                output.AppendLine("endpoint: " + settings.AiBaseUrl);
+                output.AppendLine("model: " + settings.AiModel);
                 output.AppendLine("configured: " + cleanup.IsConfigured);
                 output.AppendLine("in : " + sample);
 

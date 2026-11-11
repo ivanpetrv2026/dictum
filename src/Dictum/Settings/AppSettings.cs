@@ -19,6 +19,10 @@ public sealed class AppSettings
 
     public string AiModel { get; set; } = "anthropic/claude-haiku-4.5";
 
+    public string AiProvider { get; set; } = "openrouter";
+
+    public string AiBaseUrl { get; set; } = "https://openrouter.ai/api/v1/chat/completions";
+
     public int AiMinWords { get; set; } = 6;
 
     public int AiTimeoutSeconds { get; set; } = 8;
