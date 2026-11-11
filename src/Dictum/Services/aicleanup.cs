@@ -40,13 +40,22 @@ public sealed class AiCleanup
     {
         "orcarouter" => "https://api.orcarouter.ai/v1/chat/completions",
         "teamorouter" => "https://api.teamorouter.com/v1/chat/completions",
+        "bynara" => "https://router.bynara.id/v1/chat/completions",
         _ => "https://openrouter.ai/api/v1/chat/completions"
+    };
+
+    public static string DefaultModel(string provider) => provider switch
+    {
+        "teamorouter" => "claude-haiku-4-5",
+        "bynara" => "agnes-2.5-flash",
+        _ => "anthropic/claude-haiku-4.5"
     };
 
     public static string CredentialTarget(string provider) => provider switch
     {
         "orcarouter" => "Dictum/orcarouter",
         "teamorouter" => "Dictum/teamorouter",
+        "bynara" => "Dictum/bynara",
         _ => "Dictum/openrouter"
     };
 
@@ -56,6 +65,7 @@ public sealed class AiCleanup
         {
             "orcarouter" => Environment.GetEnvironmentVariable("ORCAROUTER_API_KEY"),
             "teamorouter" => Environment.GetEnvironmentVariable("TEAMOROUTER_API_KEY"),
+            "bynara" => Environment.GetEnvironmentVariable("BYNARA_API_KEY"),
             _ => Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
         };
 

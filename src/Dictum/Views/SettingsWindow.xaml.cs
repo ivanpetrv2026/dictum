@@ -134,6 +134,7 @@ public partial class SettingsWindow : Window
         }
 
         AiBaseUrlBox.Text = AiCleanup.DefaultEndpoint(provider);
+        AiModelBox.Text = AiCleanup.DefaultModel(provider);
     }
 
     private void OnBrowse(object sender, RoutedEventArgs e)

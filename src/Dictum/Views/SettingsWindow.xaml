@@ -84,6 +84,7 @@
                         <ComboBoxItem Content="OpenRouter" Tag="openrouter" />
                         <ComboBoxItem Content="OrcaRouter" Tag="orcarouter" />
                         <ComboBoxItem Content="TeamRouter" Tag="teamorouter" />
+                        <ComboBoxItem Content="Bynara" Tag="bynara" />
                         <ComboBoxItem Content="Другой" Tag="custom" />
                     </ComboBox>
                     <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0,8,0" Text="Модель:" />
@@ -111,7 +112,7 @@
                    Margin="0,0,0,10"
                    Foreground="#666"
                    TextWrapping="Wrap"
-                   Text="Ключ берётся из переменной окружения (OPENROUTER_API_KEY / ORCAROUTER_API_KEY / TEAMOROUTER_API_KEY) или из хранилища учётных данных Windows: Dictum/openrouter, Dictum/orcarouter, Dictum/teamorouter." />
+                   Text="Ключ берётся из переменной окружения (OPENROUTER_API_KEY / ORCAROUTER_API_KEY / TEAMOROUTER_API_KEY / BYNARA_API_KEY) или из хранилища учётных данных Windows: Dictum/openrouter, Dictum/orcarouter, Dictum/teamorouter, Dictum/bynara." />
 
         <StackPanel Grid.Row="9" HorizontalAlignment="Right" Orientation="Horizontal">
             <Button Width="100" Margin="0,0,8,0" Content="Отмена" Click="OnCancel" />
