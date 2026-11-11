@@ -1,133 +1,162 @@
 <Window x:Class="Dictum.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dictum — настройки"
-        Height="700"
-        Width="740"
+        Title="Dictum — панель управления"
+        Height="780"
+        Width="780"
         WindowStartupLocation="CenterScreen">
-    <Grid Margin="20">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Margin="0,0,0,6"
-                   FontWeight="SemiBold"
-                   Text="Путь к модели Whisper (.bin)" />
+        <TabControl Grid.Row="0">
+            <TabItem Header="Дашборд">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="Состояние" FontSize="18" FontWeight="Bold" />
 
-        <Grid Grid.Row="1" Margin="0,0,0,14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBox x:Name="ModelPathBox" Grid.Column="0" Padding="6" VerticalContentAlignment="Center" />
-            <Button Grid.Column="1" Width="96" Margin="8,0,0,0" Content="Обзор…" Click="OnBrowse" />
-        </Grid>
+                        <Border Margin="0,10,0,0" Padding="14" Background="#F5F5F7" CornerRadius="6">
+                            <StackPanel>
+                                <TextBlock x:Name="DashProviderText" FontSize="14" TextWrapping="Wrap" />
+                                <TextBlock x:Name="DashKeysText" Margin="0,8,0,0" Foreground="#444" TextWrapping="Wrap" />
+                                <TextBlock x:Name="DashStatsText" Margin="0,6,0,0" Foreground="#444" />
+                            </StackPanel>
+                        </Border>
 
-        <TextBlock Grid.Row="2"
-                   Margin="0,0,0,6"
-                   FontWeight="SemiBold"
-                   Text="Язык распознавания" />
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button x:Name="TestButton" Width="150" Content="Проверить связь" Click="OnTestClick" />
+                            <TextBlock x:Name="TestResultText"
+                                       Margin="12,0,0,0"
+                                       MaxWidth="500"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
 
-        <ComboBox x:Name="LanguageBox" Grid.Row="3" Width="220" HorizontalAlignment="Left" Margin="0,0,0,14">
-            <ComboBoxItem Content="ru" />
-            <ComboBoxItem Content="en" />
-            <ComboBoxItem Content="auto" />
-        </ComboBox>
+                        <TextBlock Margin="0,18,0,6" FontWeight="SemiBold" Text="Последние диктовки" />
+                        <TextBlock x:Name="DashRecentText" Foreground="#555" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-        <Grid Grid.Row="4" Margin="0,0,0,6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" FontWeight="SemiBold" Text="Словарь терминов" />
-            <CheckBox x:Name="LearnBox" Grid.Column="1" Content="Учить мои исправления" />
-        </Grid>
+            <TabItem Header="Настройки">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-        <TextBox x:Name="TermsBox"
-                 Grid.Row="5"
-                 AcceptsReturn="True"
-                 AcceptsTab="False"
-                 FontFamily="Consolas"
-                 FontSize="13"
-                 Padding="6"
-                 TextWrapping="NoWrap"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto" />
+                        <TextBlock Grid.Row="0" Margin="0,0,0,6" FontWeight="SemiBold" Text="Путь к модели Whisper (.bin)" />
 
-        <Border Grid.Row="6" Margin="0,14,0,0" Padding="12" Background="#F5F5F7" CornerRadius="6">
-            <StackPanel>
-                <CheckBox x:Name="AiBox" FontWeight="SemiBold" Content="ИИ-очистка текста через шлюз" />
-                <TextBlock Margin="0,6,0,0"
-                           Foreground="#555"
-                           TextWrapping="Wrap"
-                           Text="Выключено по умолчанию. При включении распознанный текст одной диктовки уходит по HTTPS на выбранный шлюз и возвращается с расставленными знаками препинания. Других сетевых соединений приложение не делает." />
+                        <Grid Grid.Row="1" Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ModelPathBox" Grid.Column="0" Padding="6" VerticalContentAlignment="Center" />
+                            <Button Grid.Column="1" Width="96" Margin="8,0,0,0" Content="Обзор…" Click="OnBrowse" />
+                        </Grid>
 
-                <Grid Margin="0,10,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="150" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Шлюз:" />
-                    <ComboBox x:Name="AiProviderBox" Grid.Column="1" SelectionChanged="OnProviderChanged">
-                        <ComboBoxItem Content="OpenRouter" Tag="openrouter" />
-                        <ComboBoxItem Content="OrcaRouter" Tag="orcarouter" />
-                        <ComboBoxItem Content="TeamRouter" Tag="teamorouter" />
-                        <ComboBoxItem Content="Bynara" Tag="bynara" />
-                        <ComboBoxItem Content="Другой" Tag="custom" />
-                    </ComboBox>
-                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0,8,0" Text="Модель:" />
-                    <TextBox x:Name="AiModelBox" Grid.Column="3" Padding="4" VerticalContentAlignment="Center" />
-                </Grid>
+                        <TextBlock Grid.Row="2" Margin="0,0,0,6" FontWeight="SemiBold" Text="Язык распознавания" />
 
-                <Grid Margin="0,6,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Endpoint:" />
-                    <TextBox x:Name="AiBaseUrlBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
-                </Grid>
+                        <ComboBox x:Name="LanguageBox" Grid.Row="3" Width="220" HorizontalAlignment="Left" Margin="0,0,0,14">
+                            <ComboBoxItem Content="ru" />
+                            <ComboBoxItem Content="en" />
+                            <ComboBoxItem Content="auto" />
+                        </ComboBox>
 
-                <CheckBox x:Name="AiFallbackBox"
-                          Margin="0,10,0,0"
-                          Content="Резервный шлюз Gemini, если основной не ответил" />
+                        <Grid Grid.Row="4" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" FontWeight="SemiBold" Text="Словарь терминов" />
+                            <CheckBox x:Name="LearnBox" Grid.Column="1" Content="Учить мои исправления" />
+                        </Grid>
 
-                <Grid Margin="0,6,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Модель Gemini:" />
-                    <TextBox x:Name="AiFallbackModelBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
-                </Grid>
-            </StackPanel>
-        </Border>
+                        <TextBox x:Name="TermsBox"
+                                 Grid.Row="5"
+                                 Height="170"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="False"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 Padding="6"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto" />
 
-        <TextBlock Grid.Row="7"
-                   Margin="0,12,0,10"
-                   Foreground="#666"
-                   TextWrapping="Wrap"
-                   Text="Словарь: по одному термину в строке, формат «Канонично | вариант1, вариант2». Варианты — то, как Whisper или ты произносишь термин. Словарь уходит в подсказку модели и правит текст после распознавания." />
+                        <Border Grid.Row="6" Margin="0,14,0,0" Padding="12" Background="#F5F5F7" CornerRadius="6">
+                            <StackPanel>
+                                <CheckBox x:Name="AiBox" FontWeight="SemiBold" Content="ИИ-очистка текста через шлюз" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="#555"
+                                           TextWrapping="Wrap"
+                                           Text="Выключено по умолчанию. При включении распознанный текст одной диктовки уходит по HTTPS на выбранный шлюз. Других сетевых соединений приложение не делает." />
 
-        <TextBlock Grid.Row="8"
-                   Margin="0,0,0,10"
-                   Foreground="#666"
-                   TextWrapping="Wrap"
-                   Text="Ключ берётся из переменной окружения (OPENROUTER_API_KEY / ORCAROUTER_API_KEY / TEAMOROUTER_API_KEY / BYNARA_API_KEY) или из хранилища учётных данных Windows: Dictum/openrouter, Dictum/orcarouter, Dictum/teamorouter, Dictum/bynara." />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Шлюз:" />
+                                    <ComboBox x:Name="AiProviderBox" Grid.Column="1" SelectionChanged="OnProviderChanged">
+                                        <ComboBoxItem Content="OpenRouter" Tag="openrouter" />
+                                        <ComboBoxItem Content="OrcaRouter" Tag="orcarouter" />
+                                        <ComboBoxItem Content="TeamRouter" Tag="teamorouter" />
+                                        <ComboBoxItem Content="Bynara" Tag="bynara" />
+                                        <ComboBoxItem Content="Gemini" Tag="gemini" />
+                                        <ComboBoxItem Content="Другой" Tag="custom" />
+                                    </ComboBox>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0,8,0" Text="Модель:" />
+                                    <TextBox x:Name="AiModelBox" Grid.Column="3" Padding="4" VerticalContentAlignment="Center" />
+                                </Grid>
 
-        <StackPanel Grid.Row="9" HorizontalAlignment="Right" Orientation="Horizontal">
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Endpoint:" />
+                                    <TextBox x:Name="AiBaseUrlBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
+                                </Grid>
+
+                                <CheckBox x:Name="AiFallbackBox"
+                                          Margin="0,10,0,0"
+                                          Content="Резервный шлюз Gemini, если основной не ответил" />
+
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Модель Gemini:" />
+                                    <TextBox x:Name="AiFallbackModelBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Grid.Row="7"
+                                   Margin="0,12,0,0"
+                                   Foreground="#666"
+                                   TextWrapping="Wrap"
+                                   Text="Словарь: по одному термину в строке, формат «Канонично | вариант1, вариант2». Ключи берутся из переменных окружения или из хранилища учётных данных Windows (Dictum/openrouter, Dictum/gemini, Dictum/bynara, Dictum/teamorouter, Dictum/orcarouter)." />
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="1" Margin="0,12,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
             <Button Width="100" Margin="0,0,8,0" Content="Отмена" Click="OnCancel" />
             <Button Width="110" Content="Сохранить" IsDefault="True" Click="OnSave" />
         </StackPanel>

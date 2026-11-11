@@ -20,6 +20,7 @@ public sealed class AppController : IDisposable
     private readonly HotkeyPoller _hotkey = new();
     private readonly TrayIcon _tray = new();
     private readonly VocabularyStore _vocabularyStore = new();
+    private readonly StatsStore _statsStore = new();
 
     private List<VocabularyTerm> _vocabulary;
     private TermCorrector _corrector;
@@ -125,6 +126,7 @@ public sealed class AppController : IDisposable
             _injector.Focus(_targetWindow);
             await Task.Delay(120);
             _injector.TypeText(final + " ");
+            _statsStore.Record(final);
             LearnFromEdits(final);
         }
         catch (Exception ex)
@@ -173,7 +175,7 @@ public sealed class AppController : IDisposable
 
     public void ShowSettings()
     {
-        var window = new SettingsWindow(_settings, _vocabulary);        if (window.ShowDialog() != true)
+        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load());        if (window.ShowDialog() != true)
         {
             return;
         }

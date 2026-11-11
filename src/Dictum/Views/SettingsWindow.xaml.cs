@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using Dictum.Services;
@@ -9,16 +10,27 @@ namespace Dictum.Views;
 
 public partial class SettingsWindow : Window
 {
+    private static readonly (string Tag, string Name)[] Providers =
+    {
+        ("openrouter", "OpenRouter"),
+        ("gemini", "Gemini"),
+        ("orcarouter", "OrcaRouter"),
+        ("teamorouter", "TeamRouter"),
+        ("bynara", "Bynara")
+    };
+
     private readonly AppSettings _settings;
     private readonly List<VocabularyTerm> _originalTerms;
+    private readonly StatsSnapshot _stats;
     private readonly bool _initializing;
 
-    public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms)
+    public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms, StatsSnapshot stats)
     {
         InitializeComponent();
         _initializing = true;
 
         _settings = settings;
+        _stats = stats;
         _originalTerms = terms
             .Select(term => new VocabularyTerm
             {
@@ -59,11 +71,38 @@ public partial class SettingsWindow : Window
         LanguageBox.SelectedItem ??= LanguageBox.Items[0];
 
         _initializing = false;
+        UpdateDashboard();
     }
 
     public AppSettings Result => _settings;
 
     public List<VocabularyTerm> ResultTerms { get; private set; } = new();
+
+    private static string ProviderName(string tag) =>
+        Providers.FirstOrDefault(provider => provider.Tag == tag).Name ?? tag;
+
+    private void UpdateDashboard()
+    {
+        DashProviderText.Text =
+            $"Шлюз: {ProviderName(_settings.AiProvider)} · {_settings.AiModel}"
+            + (_settings.AiFallbackEnabled ? $"   |   резерв: Gemini · {_settings.AiFallbackModel}" : string.Empty);
+
+        var keys = Providers
+            .Select(provider =>
+            {
+                var key = AiCleanup.ResolveKey(provider.Tag);
+                return $"{provider.Name}: {(string.IsNullOrWhiteSpace(key) ? "—" : "✓")}";
+            });
+
+        DashKeysText.Text = "Ключи: " + string.Join("   ", keys);
+        DashStatsText.Text = $"Диктовок сегодня: {_stats.Today}   ·   всего: {_stats.Total}";
+
+        DashRecentText.Text = _stats.Recent.Count == 0
+            ? "Пока пусто."
+            : string.Join(
+                Environment.NewLine,
+                _stats.Recent.Take(5).Select(entry => $"{entry.Time:HH:mm} — {entry.Text}"));
+    }
 
     private static string FormatTerms(IEnumerable<VocabularyTerm> terms) =>
         string.Join(
@@ -139,6 +178,60 @@ public partial class SettingsWindow : Window
         AiModelBox.Text = AiCleanup.DefaultModel(provider);
     }
 
+    private async void OnTestClick(object sender, RoutedEventArgs e)
+    {
+        TestButton.IsEnabled = false;
+        TestResultText.Text = "Проверяю…";
+
+        const string sample = "привет это проверка связи мы используем click house и github";
+
+        try
+        {
+            var provider = (AiProviderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "openrouter";
+            var model = string.IsNullOrWhiteSpace(AiModelBox.Text) ? AiCleanup.DefaultModel(provider) : AiModelBox.Text.Trim();
+            var endpoint = string.IsNullOrWhiteSpace(AiBaseUrlBox.Text) ? AiCleanup.DefaultEndpoint(provider) : AiBaseUrlBox.Text.Trim();
+
+            var stopwatch = Stopwatch.StartNew();
+            var primary = new AiCleanup(provider, AiCleanup.ResolveKey(provider) ?? string.Empty, model, endpoint);
+            var result = await primary.CleanAsync(sample, 15);
+            stopwatch.Stop();
+
+            if (!string.IsNullOrWhiteSpace(result))
+            {
+                TestResultText.Text = $"✓ {ProviderName(provider)}: {stopwatch.Elapsed.TotalSeconds:F1} с — «{result}»";
+                return;
+            }
+
+            if (AiFallbackBox.IsChecked == true)
+            {
+                var fallback = new AiCleanup(
+                    "gemini",
+                    AiCleanup.ResolveKey("gemini") ?? string.Empty,
+                    string.IsNullOrWhiteSpace(AiFallbackModelBox.Text) ? "gemini-3-flash-preview" : AiFallbackModelBox.Text.Trim(),
+                    AiCleanup.DefaultEndpoint("gemini"));
+
+                var fallbackWatch = Stopwatch.StartNew();
+                var fallbackResult = await fallback.CleanAsync(sample, 15);
+                fallbackWatch.Stop();
+
+                TestResultText.Text = !string.IsNullOrWhiteSpace(fallbackResult)
+                    ? $"основной не ответил; резерв Gemini: {fallbackWatch.Elapsed.TotalSeconds:F1} с — «{fallbackResult}»"
+                    : "✗ ни основной, ни резервный шлюз не ответили (смотри dictum.log)";
+                return;
+            }
+
+            TestResultText.Text = "✗ шлюз не ответил (смотри dictum.log)";
+        }
+        catch (Exception ex)
+        {
+            TestResultText.Text = "✗ " + ex.Message;
+        }
+        finally
+        {
+            TestButton.IsEnabled = true;
+        }
+    }
+
     private void OnBrowse(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
@@ -161,7 +254,7 @@ public partial class SettingsWindow : Window
         _settings.AiEnabled = AiBox.IsChecked == true;
         _settings.AiProvider = (AiProviderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "openrouter";
         _settings.AiModel = string.IsNullOrWhiteSpace(AiModelBox.Text)
-            ? "anthropic/claude-haiku-4.5"
+            ? AiCleanup.DefaultModel(_settings.AiProvider)
             : AiModelBox.Text.Trim();
         _settings.AiBaseUrl = string.IsNullOrWhiteSpace(AiBaseUrlBox.Text)
             ? AiCleanup.DefaultEndpoint(_settings.AiProvider)
