@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -7,10 +8,10 @@ namespace Dictum.Services;
 /// <summary>
 /// Optional LLM pass over the transcript: punctuation, casing and obvious
 /// slips of the tongue. Off by default — when enabled, the recognised text is
-/// sent to the configured router, so it is an explicit privacy decision.
+/// sent to the configured provider, so it is an explicit privacy decision.
 ///
-/// Works with any OpenAI-compatible gateway: OpenRouter, OrcaRouter,
-/// TeamRouter, Bynara or a custom endpoint.
+/// Supports OpenAI-compatible gateways (OpenRouter, OrcaRouter, TeamRouter,
+/// Bynara, custom) and Google Gemini's native API.
 /// </summary>
 public sealed class AiCleanup
 {
@@ -23,24 +24,28 @@ public sealed class AiCleanup
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
 
+    private readonly string _provider;
     private readonly string _apiKey;
     private readonly string _model;
     private readonly string _endpoint;
 
-    public AiCleanup(string apiKey, string model, string endpoint)
+    public AiCleanup(string provider, string apiKey, string model, string endpoint)
     {
+        _provider = string.IsNullOrWhiteSpace(provider) ? "openrouter" : provider;
         _apiKey = apiKey;
-        _model = string.IsNullOrWhiteSpace(model) ? "anthropic/claude-haiku-4.5" : model;
-        _endpoint = string.IsNullOrWhiteSpace(endpoint)
-            ? "https://openrouter.ai/api/v1/chat/completions"
-            : endpoint;
+        _model = string.IsNullOrWhiteSpace(model) ? DefaultModel(_provider) : model;
+        _endpoint = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint(_provider) : endpoint;
     }
+
+    public static bool IsGemini(string provider) =>
+        string.Equals(provider, "gemini", StringComparison.OrdinalIgnoreCase);
 
     public static string DefaultEndpoint(string provider) => provider switch
     {
         "orcarouter" => "https://api.orcarouter.ai/v1/chat/completions",
         "teamorouter" => "https://api.teamorouter.com/v1/chat/completions",
         "bynara" => "https://router.bynara.id/v1/chat/completions",
+        "gemini" => "https://generativelanguage.googleapis.com/v1beta",
         _ => "https://openrouter.ai/api/v1/chat/completions"
     };
 
@@ -48,6 +53,7 @@ public sealed class AiCleanup
     {
         "teamorouter" => "claude-haiku-4-5",
         "bynara" => "agnes-2.5-flash",
+        "gemini" => "gemini-3-flash-preview",
         _ => "anthropic/claude-haiku-4.5"
     };
 
@@ -56,6 +62,7 @@ public sealed class AiCleanup
         "orcarouter" => "Dictum/orcarouter",
         "teamorouter" => "Dictum/teamorouter",
         "bynara" => "Dictum/bynara",
+        "gemini" => "Dictum/gemini",
         _ => "Dictum/openrouter"
     };
 
@@ -66,6 +73,8 @@ public sealed class AiCleanup
             "orcarouter" => Environment.GetEnvironmentVariable("ORCAROUTER_API_KEY"),
             "teamorouter" => Environment.GetEnvironmentVariable("TEAMOROUTER_API_KEY"),
             "bynara" => Environment.GetEnvironmentVariable("BYNARA_API_KEY"),
+            "gemini" => Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+                        ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY"),
             _ => Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
         };
 
@@ -101,51 +110,16 @@ public sealed class AiCleanup
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 2, 30)));
+            var raw = IsGemini(_provider)
+                ? await CallGeminiAsync(text, timeout.Token).ConfigureAwait(false)
+                : await CallOpenAiAsync(text, timeout.Token).ConfigureAwait(false);
 
-            var payload = new
-            {
-                model = _model,
-                temperature = 0.2,
-                max_tokens = 800,
-                messages = new object[]
-                {
-                    new { role = "system", content = SystemPrompt },
-                    new { role = "user", content = "<<<TEXT>>>\n" + text + "\n<<<END>>>" }
-                }
-            };
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
-            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + _apiKey);
-            request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://github.com/ivanpetrv2026/dictum");
-            request.Headers.TryAddWithoutValidation("X-Title", "Dictum");
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(payload),
-                Encoding.UTF8,
-                "application/json");
-
-            using var response = await Http.SendAsync(request, timeout.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorBody = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
-                Log.Write($"ai: HTTP {(int)response.StatusCode} from {_endpoint}: {Snippet(errorBody)}");
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
-            using var document = JsonDocument.Parse(json);
-
-            var content = document.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
-
-            if (string.IsNullOrWhiteSpace(content))
+            if (string.IsNullOrWhiteSpace(raw))
             {
                 return null;
             }
 
-            var cleaned = content.Trim().Trim('"', '«', '»').Trim();
+            var cleaned = raw.Trim().Trim('"', '«', '»').Trim();
 
             if (LooksLikeReply(text, cleaned))
             {
@@ -157,9 +131,122 @@ public sealed class AiCleanup
         }
         catch (Exception ex)
         {
-            Log.Write("ai failed: " + ex.Message);
+            Log.Write($"ai failed ({_provider}): " + ex.Message);
             return null;
         }
+    }
+
+    private async Task<string?> CallOpenAiAsync(string text, CancellationToken token)
+    {
+        var payload = new
+        {
+            model = _model,
+            temperature = 0.2,
+            max_tokens = 800,
+            messages = new object[]
+            {
+                new { role = "system", content = SystemPrompt },
+                new { role = "user", content = "<<<TEXT>>>\n" + text + "\n<<<END>>>" }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+        };
+
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + _apiKey);
+        request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://github.com/ivanpetrv2026/dictum");
+        request.Headers.TryAddWithoutValidation("X-Title", "Dictum");
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var response = await Http.SendAsync(request, token).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            Log.Write($"ai: HTTP {(int)response.StatusCode} from {_endpoint}: {Snippet(errorBody)}");
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(json);
+
+        return document.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString();
+    }
+
+    private async Task<string?> CallGeminiAsync(string text, CancellationToken token)
+    {
+        var url = _endpoint.TrimEnd('/')
+                  + "/models/" + Uri.EscapeDataString(_model)
+                  + ":generateContent?key=" + Uri.EscapeDataString(_apiKey);
+
+        var payload = new
+        {
+            system_instruction = new
+            {
+                parts = new[] { new { text = SystemPrompt } }
+            },
+            contents = new object[]
+            {
+                new
+                {
+                    role = "user",
+                    parts = new[] { new { text = "<<<TEXT>>>\n" + text + "\n<<<END>>>" } }
+                }
+            },
+            generationConfig = new { temperature = 0.2, maxOutputTokens = 800 }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+        };
+
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var response = await Http.SendAsync(request, token).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            Log.Write($"ai: HTTP {(int)response.StatusCode} from gemini: {Snippet(errorBody)}");
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(json);
+
+        if (!document.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        if (!candidates[0].TryGetProperty("content", out var content)
+            || !content.TryGetProperty("parts", out var parts))
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var part in parts.EnumerateArray())
+        {
+            if (part.TryGetProperty("thought", out var thought) && thought.ValueKind == JsonValueKind.True)
+            {
+                continue;
+            }
+
+            if (part.TryGetProperty("text", out var partText))
+            {
+                builder.Append(partText.GetString());
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static string Snippet(string value) =>
@@ -167,9 +254,6 @@ public sealed class AiCleanup
 
     /// <summary>
     /// Guards against the model answering the dictation instead of editing it.
-    /// A reply is rejected when it is disproportionately long or introduces
-    /// phrases the speaker never said (the model apologising, asking for the
-    /// text, explaining its role, and so on).
     /// </summary>
     private static bool LooksLikeReply(string input, string output)
     {

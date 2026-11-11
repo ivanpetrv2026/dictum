@@ -26,6 +26,7 @@ public partial class App : System.Windows.Application
 
                 var settings = new SettingsStore().Load();
                 var cleanup = new AiCleanup(
+                    settings.AiProvider,
                     AiCleanup.ResolveKey(settings.AiProvider) ?? string.Empty,
                     settings.AiModel,
                     settings.AiBaseUrl);
@@ -38,6 +39,19 @@ public partial class App : System.Windows.Application
 
                 var result = cleanup.CleanAsync(sample, 20).GetAwaiter().GetResult();
                 output.AppendLine("out: " + (result ?? "<null>"));
+
+                if (result is null && settings.AiFallbackEnabled)
+                {
+                    var fallbackCleanup = new AiCleanup(
+                        "gemini",
+                        AiCleanup.ResolveKey("gemini") ?? string.Empty,
+                        settings.AiFallbackModel,
+                        AiCleanup.DefaultEndpoint("gemini"));
+
+                    output.AppendLine("fallback configured: " + fallbackCleanup.IsConfigured);
+                    var fallbackResult = fallbackCleanup.CleanAsync(sample, 20).GetAwaiter().GetResult();
+                    output.AppendLine("fallback out: " + (fallbackResult ?? "<null>"));
+                }
             }
             catch (Exception ex)
             {

@@ -32,6 +32,8 @@ public partial class SettingsWindow : Window
         AiBox.IsChecked = settings.AiEnabled;
         AiModelBox.Text = settings.AiModel;
         AiBaseUrlBox.Text = settings.AiBaseUrl;
+        AiFallbackBox.IsChecked = settings.AiFallbackEnabled;
+        AiFallbackModelBox.Text = settings.AiFallbackModel;
         TermsBox.Text = FormatTerms(_originalTerms);
 
         foreach (ComboBoxItem item in AiProviderBox.Items)
@@ -164,6 +166,10 @@ public partial class SettingsWindow : Window
         _settings.AiBaseUrl = string.IsNullOrWhiteSpace(AiBaseUrlBox.Text)
             ? AiCleanup.DefaultEndpoint(_settings.AiProvider)
             : AiBaseUrlBox.Text.Trim();
+        _settings.AiFallbackEnabled = AiFallbackBox.IsChecked == true;
+        _settings.AiFallbackModel = string.IsNullOrWhiteSpace(AiFallbackModelBox.Text)
+            ? "gemini-3-flash-preview"
+            : AiFallbackModelBox.Text.Trim();
 
         ResultTerms = ParseTerms(TermsBox.Text);
         DialogResult = true;

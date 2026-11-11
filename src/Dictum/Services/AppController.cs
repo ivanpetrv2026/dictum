@@ -24,7 +24,7 @@ public sealed class AppController : IDisposable
     private List<VocabularyTerm> _vocabulary;
     private TermCorrector _corrector;
     private string _prompt;
-    private AiCleanup? _ai;
+    private readonly Dictionary<string, AiCleanup> _cleanups = new();
     private AppSettings _settings;
     private WhisperTranscriber? _transcriber;
     private nint _targetWindow;
@@ -180,7 +180,7 @@ public sealed class AppController : IDisposable
 
         _settings = window.Result;
         _store.Save(_settings);
-        _ai = null;
+        _cleanups.Clear();
 
         _vocabulary = window.ResultTerms;
         _vocabularyStore.Save(_vocabulary);
@@ -199,32 +199,61 @@ public sealed class AppController : IDisposable
             return text;
         }
 
-        _ai ??= new AiCleanup(
-            AiCleanup.ResolveKey(_settings.AiProvider) ?? string.Empty,
-            _settings.AiModel,
-            _settings.AiBaseUrl);
-
-        if (!_ai.IsConfigured)
-        {
-            Log.Write("ai: enabled but no OPENROUTER_API_KEY / Dictum-openrouter credential");
-            return text;
-        }
-
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
         if (words < _settings.AiMinWords)
         {
             return text;
         }
 
-        var cleaned = await _ai.CleanAsync(text, _settings.AiTimeoutSeconds);
-        if (string.IsNullOrWhiteSpace(cleaned))
+        var primary = await RunCleanupAsync(_settings.AiProvider, _settings.AiModel, _settings.AiBaseUrl, text);
+        if (!string.IsNullOrWhiteSpace(primary))
         {
-            return text;
+            var normalized = _corrector.Correct(primary);
+            Log.Write($"ai: {words} words -> '{normalized}'");
+            return normalized;
         }
 
-        var normalized = _corrector.Correct(cleaned);
-        Log.Write($"ai: {words} words -> '{normalized}'");
-        return normalized;
+        if (_settings.AiFallbackEnabled)
+        {
+            var fallback = await RunCleanupAsync(
+                "gemini",
+                _settings.AiFallbackModel,
+                AiCleanup.DefaultEndpoint("gemini"),
+                text);
+
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                var normalized = _corrector.Correct(fallback);
+                Log.Write($"ai (fallback gemini): {words} words -> '{normalized}'");
+                return normalized;
+            }
+        }
+
+        return text;
+    }
+
+    private async Task<string?> RunCleanupAsync(string provider, string model, string endpoint, string text)
+    {
+        var cleanup = GetCleanup(provider, model, endpoint);
+        if (!cleanup.IsConfigured)
+        {
+            Log.Write($"ai: {provider} is not configured");
+            return null;
+        }
+
+        return await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds);
+    }
+
+    private AiCleanup GetCleanup(string provider, string model, string endpoint)
+    {
+        var key = provider + "|" + model + "|" + endpoint;
+        if (!_cleanups.TryGetValue(key, out var cleanup))
+        {
+            cleanup = new AiCleanup(provider, AiCleanup.ResolveKey(provider) ?? string.Empty, model, endpoint);
+            _cleanups[key] = cleanup;
+        }
+
+        return cleanup;
     }
 
     private string BuildPrompt()

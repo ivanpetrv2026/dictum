@@ -99,6 +99,19 @@
                     <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Endpoint:" />
                     <TextBox x:Name="AiBaseUrlBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
                 </Grid>
+
+                <CheckBox x:Name="AiFallbackBox"
+                          Margin="0,10,0,0"
+                          Content="Резервный шлюз Gemini, если основной не ответил" />
+
+                <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Модель Gemini:" />
+                    <TextBox x:Name="AiFallbackModelBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
+                </Grid>
             </StackPanel>
         </Border>
 

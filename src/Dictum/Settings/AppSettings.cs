@@ -17,6 +17,10 @@ public sealed class AppSettings
 
     public bool AiEnabled { get; set; }
 
+    public bool AiFallbackEnabled { get; set; } = true;
+
+    public string AiFallbackModel { get; set; } = "gemini-3-flash-preview";
+
     public string AiModel { get; set; } = "anthropic/claude-haiku-4.5";
 
     public string AiProvider { get; set; } = "openrouter";
