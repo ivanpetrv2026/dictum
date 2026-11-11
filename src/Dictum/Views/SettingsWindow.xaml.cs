@@ -26,6 +26,8 @@ public partial class SettingsWindow : Window
 
         ModelPathBox.Text = settings.ModelPath;
         LearnBox.IsChecked = settings.LearnEnabled;
+        AiBox.IsChecked = settings.AiEnabled;
+        AiModelBox.Text = settings.AiModel;
         TermsBox.Text = FormatTerms(_originalTerms);
 
         foreach (ComboBoxItem item in LanguageBox.Items)
@@ -121,6 +123,10 @@ public partial class SettingsWindow : Window
         _settings.ModelPath = ModelPathBox.Text.Trim();
         _settings.Language = (LanguageBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "ru";
         _settings.LearnEnabled = LearnBox.IsChecked == true;
+        _settings.AiEnabled = AiBox.IsChecked == true;
+        _settings.AiModel = string.IsNullOrWhiteSpace(AiModelBox.Text)
+            ? "anthropic/claude-haiku-4.5"
+            : AiModelBox.Text.Trim();
 
         ResultTerms = ParseTerms(TermsBox.Text);
         DialogResult = true;

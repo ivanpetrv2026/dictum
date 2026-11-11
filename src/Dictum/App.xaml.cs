@@ -13,6 +13,38 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--ai-test"))
+        {
+            var output = new System.Text.StringBuilder();
+            try
+            {
+                var index = Array.IndexOf(e.Args, "--ai-test");
+                var sample = index + 1 < e.Args.Length
+                    ? e.Args[index + 1]
+                    : "привет это тест пунктуации и очистки текста мы используем click house и github";
+
+                var cleanup = new AiCleanup(AiCleanup.ResolveKey() ?? string.Empty, "anthropic/claude-haiku-4.5");
+                output.AppendLine("configured: " + cleanup.IsConfigured);
+                output.AppendLine("in : " + sample);
+
+                var result = cleanup.CleanAsync(sample, 20).GetAwaiter().GetResult();
+                output.AppendLine("out: " + (result ?? "<null>"));
+            }
+            catch (Exception ex)
+            {
+                output.AppendLine("error: " + ex);
+            }
+
+            var aiPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum",
+                "ai-test.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(aiPath)!);
+            System.IO.File.WriteAllText(aiPath, output.ToString());
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Contains("--selftest"))
         {
             try
@@ -42,6 +74,11 @@ public partial class App : System.Windows.Application
 
         _controller = new AppController();
         _controller.Start();
+
+        if (e.Args.Contains("--settings"))
+        {
+            _controller.ShowSettings();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

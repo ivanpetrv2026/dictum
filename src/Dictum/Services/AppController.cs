@@ -24,6 +24,7 @@ public sealed class AppController : IDisposable
     private List<VocabularyTerm> _vocabulary;
     private TermCorrector _corrector;
     private string _prompt;
+    private AiCleanup? _ai;
     private AppSettings _settings;
     private WhisperTranscriber? _transcriber;
     private nint _targetWindow;
@@ -119,10 +120,12 @@ public sealed class AppController : IDisposable
                 Log.Write($"corrected: '{corrected}'");
             }
 
+            var final = await ApplyAiAsync(corrected);
+
             _injector.Focus(_targetWindow);
             await Task.Delay(120);
-            _injector.TypeText(corrected + " ");
-            LearnFromEdits(corrected);
+            _injector.TypeText(final + " ");
+            LearnFromEdits(final);
         }
         catch (Exception ex)
         {
@@ -168,16 +171,16 @@ public sealed class AppController : IDisposable
         return new WhisperTranscriber(_settings.ModelPath, _settings.Language, _prompt);
     }
 
-    private void ShowSettings()
+    public void ShowSettings()
     {
-        var window = new SettingsWindow(_settings, _vocabulary);
-        if (window.ShowDialog() != true)
+        var window = new SettingsWindow(_settings, _vocabulary);        if (window.ShowDialog() != true)
         {
             return;
         }
 
         _settings = window.Result;
         _store.Save(_settings);
+        _ai = null;
 
         _vocabulary = window.ResultTerms;
         _vocabularyStore.Save(_vocabulary);
@@ -187,6 +190,38 @@ public sealed class AppController : IDisposable
         Log.Write($"settings saved: model='{_settings.ModelPath}', lang={_settings.Language}, terms={_corrector.TermCount}");
         _transcriber?.Dispose();
         _transcriber = null;
+    }
+
+    private async Task<string> ApplyAiAsync(string text)
+    {
+        if (!_settings.AiEnabled)
+        {
+            return text;
+        }
+
+        _ai ??= new AiCleanup(AiCleanup.ResolveKey() ?? string.Empty, _settings.AiModel);
+
+        if (!_ai.IsConfigured)
+        {
+            Log.Write("ai: enabled but no OPENROUTER_API_KEY / Dictum-openrouter credential");
+            return text;
+        }
+
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (words < _settings.AiMinWords)
+        {
+            return text;
+        }
+
+        var cleaned = await _ai.CleanAsync(text, _settings.AiTimeoutSeconds);
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return text;
+        }
+
+        var normalized = _corrector.Correct(cleaned);
+        Log.Write($"ai: {words} words -> '{normalized}'");
+        return normalized;
     }
 
     private string BuildPrompt()

@@ -14,4 +14,12 @@ public sealed class AppSettings
     public int MinRecordMs { get; set; } = 300;
 
     public bool LearnEnabled { get; set; } = true;
+
+    public bool AiEnabled { get; set; }
+
+    public string AiModel { get; set; } = "anthropic/claude-haiku-4.5";
+
+    public int AiMinWords { get; set; } = 6;
+
+    public int AiTimeoutSeconds { get; set; } = 8;
 }

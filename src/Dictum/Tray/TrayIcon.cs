@@ -28,6 +28,8 @@ public sealed class TrayIcon : IDisposable
             Visible = true,
             ContextMenuStrip = menu
         };
+
+        _icon.DoubleClick += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public void ShowInfo(string title, string message)

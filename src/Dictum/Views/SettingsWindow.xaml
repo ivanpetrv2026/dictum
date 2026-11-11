@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Dictum — настройки"
-        Height="580"
-        Width="680"
+        Height="660"
+        Width="720"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -13,6 +13,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -62,13 +64,37 @@
                  VerticalScrollBarVisibility="Auto"
                  HorizontalScrollBarVisibility="Auto" />
 
-        <TextBlock Grid.Row="6"
-                   Margin="0,10,0,10"
+        <Border Grid.Row="6" Margin="0,14,0,0" Padding="12" Background="#F5F5F7" CornerRadius="6">
+            <StackPanel>
+                <CheckBox x:Name="AiBox" FontWeight="SemiBold" Content="ИИ-очистка текста через OpenRouter" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="#555"
+                           TextWrapping="Wrap"
+                           Text="Выключено по умолчанию. При включении распознанный текст одной диктовки уходит по HTTPS на api.openrouter.ai и возвращается с расставленными знаками препинания. Других сетевых соединений приложение не делает." />
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Модель:" />
+                    <TextBox x:Name="AiModelBox" Grid.Column="1" Padding="4" VerticalContentAlignment="Center" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Grid.Row="7"
+                   Margin="0,12,0,10"
                    Foreground="#666"
                    TextWrapping="Wrap"
-                   Text="По одному термину в строке. Формат: «Канонично | вариант1, вариант2». Варианты — то, как Whisper или ты произносишь термин («click house», «жир»). Словарь уходит в подсказку модели и правит текст после распознавания." />
+                   Text="Словарь: по одному термину в строке, формат «Канонично | вариант1, вариант2». Варианты — то, как Whisper или ты произносишь термин. Словарь уходит в подсказку модели и правит текст после распознавания." />
 
-        <StackPanel Grid.Row="7" HorizontalAlignment="Right" Orientation="Horizontal">
+        <TextBlock Grid.Row="8"
+                   Margin="0,0,0,10"
+                   Foreground="#666"
+                   TextWrapping="Wrap"
+                   Text="Ключ OpenRouter берётся из переменной окружения OPENROUTER_API_KEY или из хранилища учётных данных Windows (цель Dictum/openrouter)." />
+
+        <StackPanel Grid.Row="9" HorizontalAlignment="Right" Orientation="Horizontal">
             <Button Width="100" Margin="0,0,8,0" Content="Отмена" Click="OnCancel" />
             <Button Width="110" Content="Сохранить" IsDefault="True" Click="OnSave" />
         </StackPanel>

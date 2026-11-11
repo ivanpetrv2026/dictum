@@ -42,6 +42,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
+Name: "{autoprograms}\{#AppName} — настройки"; Filename: "{app}\{#AppExeName}"; Parameters: "--settings"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
