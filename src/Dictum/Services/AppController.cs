@@ -92,6 +92,26 @@ public sealed class AppController : IDisposable
         Log.Write($"press, target=0x{_targetWindow.ToInt64():X}");
     }
 
+    private DateTime _lastHumNoticeUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// A silently skipped take looks like the app doing nothing, so surface
+    /// the broken input once in a while instead of only in the log.
+    /// </summary>
+    private void NotifyHummingInput()
+    {
+        var now = DateTime.UtcNow;
+        if (now - _lastHumNoticeUtc < TimeSpan.FromMinutes(10))
+        {
+            return;
+        }
+
+        _lastHumNoticeUtc = now;
+        _tray.ShowError(
+            "Dictum: микрофон не подаёт речь",
+            "Записан только фоновый гул без речи. Проверьте штекер и кабель микрофона, попробуйте другой разъём.");
+    }
+
     private async void OnReleased(object? sender, EventArgs e)
     {
         var pcm = _recorder.Stop();
@@ -128,15 +148,15 @@ public sealed class AppController : IDisposable
         }
 
         var peak = AudioNormalizer.Peak(pcm);
-        var rms = AudioStats.Rms(pcm);
-        var zcr = AudioStats.ZeroCrossingRate(pcm);
-        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), rms={rms:F0}, zcr={zcr:F3}, gain {gainDb:F1} dB");
+        var stats = AudioStats.Analyze(pcm);
+        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), rms={stats.Rms:F0}, zcr={stats.Zcr:F3}, flatness={stats.Flatness:F1}, gain {gainDb:F1} dB");
 
-        // A floating jack hums at mains frequency: loud but with almost no
-        // zero crossings. Whisper turns that into hallucinations.
-        if (rms > 3000 && zcr < 0.02)
+        // A floating jack hums at mains frequency: loud, almost no zero
+        // crossings, flat envelope. Whisper turns that into hallucinations.
+        if (AudioStats.LooksLikeHum(stats))
         {
-            Log.Write($"audio: looks like a disconnected/humming input (rms={rms:F0}, zcr={zcr:F3}), skipped");
+            Log.Write($"audio: looks like a disconnected/humming input (rms={stats.Rms:F0}, zcr={stats.Zcr:F3}, flatness={stats.Flatness:F1}), skipped");
+            NotifyHummingInput();
             return;
         }
 

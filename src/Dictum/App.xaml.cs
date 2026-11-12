@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application
 
             try
             {
+                // Reporting only — the diagnostic must not change user settings.
                 using (var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator())
                 {
                     foreach (var device in enumerator.EnumerateAudioEndPoints(
@@ -29,8 +30,6 @@ public partial class App : System.Windows.Application
                                  NAudio.CoreAudioApi.DeviceState.Active))
                     {
                         var volume = device.AudioEndpointVolume;
-                        volume.Mute = false;
-                        volume.MasterVolumeLevelScalar = 0.5f;
                         report.AppendLine($"endpoint: {device.FriendlyName} | vol={volume.MasterVolumeLevelScalar:P0} | mute={volume.Mute}");
                     }
                 }
@@ -43,18 +42,26 @@ public partial class App : System.Windows.Application
                     var pcm = recorder.Stop();
 
                     var peak = Dictum.Audio.AudioNormalizer.Peak(pcm);
-                    var samples = pcm.Length / 2;
-                    double sum = 0;
-
-                    for (var i = 0; i < samples; i++)
-                    {
-                        var value = BitConverter.ToInt16(pcm, i * 2);
-                        sum += (double)value * value;
-                    }
-
-                    var rms = samples > 0 ? Math.Sqrt(sum / samples) : 0;
+                    var stats = Dictum.Audio.AudioStats.Analyze(pcm);
                     var (start, end) = Dictum.Audio.Vad.FindSpeech(pcm);
-                    report.AppendLine($"{rate} Hz: samples={samples} peak={peak} rms={rms:F0} vad={start / (double)rate:F2}..{end / (double)rate:F2}");
+                    report.AppendLine($"{rate} Hz: samples={pcm.Length / 2} peak={peak} rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1} vad={start / (double)rate:F2}..{end / (double)rate:F2}");
+
+                    if (Dictum.Audio.AudioStats.LooksLikeHum(stats))
+                    {
+                        report.AppendLine("verdict: humming input — check the plug and cable, try another jack");
+                    }
+                    else if (peak < 800)
+                    {
+                        report.AppendLine("verdict: very quiet — the mic may be muted or disconnected");
+                    }
+                    else if (end > start)
+                    {
+                        report.AppendLine("verdict: speech detected, the mic works");
+                    }
+                    else
+                    {
+                        report.AppendLine("verdict: no speech detected in the take");
+                    }
                 }
             }
             catch (Exception ex)
@@ -154,10 +161,15 @@ public partial class App : System.Windows.Application
                 var (normalized, gain) = Dictum.Audio.AudioNormalizer.Normalize(pcm);
                 var (start, end) = Dictum.Audio.Vad.FindSpeech(normalized);
                 var peak = Dictum.Audio.AudioNormalizer.Peak(pcm);
+                var stats = Dictum.Audio.AudioStats.Analyze(pcm);
 
                 report.AppendLine($"total: {pcm.Length / 32000.0:F2}s, peak {peak}");
                 report.AppendLine($"speech: {start / 16000.0:F2}s .. {end / 16000.0:F2}s ({(end - start) / 16000.0:F2}s)");
                 report.AppendLine($"gain: {gain:F1} dB");
+                report.AppendLine($"signal: rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1}");
+                report.AppendLine(Dictum.Audio.AudioStats.LooksLikeHum(stats)
+                    ? "verdict: humming input — check the plug and cable, try another jack"
+                    : "verdict: looks like speech or normal audio");
             }
             catch (Exception ex)
             {
