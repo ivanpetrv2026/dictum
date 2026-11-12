@@ -15,7 +15,7 @@
     <AssemblyTitle>Dictum — local voice dictation</AssemblyTitle>
     <Version>0.12.2</Version>
     <FileVersion>0.12.2.0</FileVersion>
-    <Company>Your Name</Company>
+    <Company>Dmitriy</Company>
     <Copyright>MIT</Copyright>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>

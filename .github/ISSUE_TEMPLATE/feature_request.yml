@@ -1,0 +1,32 @@
+name: Feature request
+description: Идея или предложение по улучшению
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу решаете
+      description: Опишите ситуацию, в которой не хватает функции
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Как обходились раньше
+      description: Чем пользовались до этого
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Совместимость с моделью приватности
+      description: "Проект не принимает изменения, требующие фоновых сетевых вызовов, хуков клавиатуры или доступа к буферу обмена (см. SECURITY.md)"
+      options:
+        - label: "Предложение не требует новых сетевых соединений, хуков клавиатуры или буфера обмена"
+          required: true

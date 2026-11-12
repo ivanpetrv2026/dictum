@@ -1,0 +1,51 @@
+name: Bug report
+description: Что-то работает не так
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия Dictum
+      description: Номер релиза или коммит, например v0.12.2
+      placeholder: v0.12.2
+    validations:
+      required: true
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Вариант сборки
+      options:
+        - "full (CUDA)"
+        - "lite (CPU)"
+        - "portable"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Модель Whisper
+      placeholder: large-v3-turbo
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открываю...
+        2. Нажимаю...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидалось и что произошло
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи
+      description: "%APPDATA%\\Dictum\\dictum.log — вставьте фрагмент или перетащите файл"
+    validations:
+      required: false
