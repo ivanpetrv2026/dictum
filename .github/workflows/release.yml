@@ -92,10 +92,16 @@ jobs:
       - name: Checksums
         shell: pwsh
         run: |
-          Get-ChildItem artifacts -Include *.exe,*.zip -File | ForEach-Object {
-            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-            "$hash  $($_.Name)"
-          } | Set-Content artifacts/SHA256SUMS.txt -Encoding utf8
+          # -Include без -Recurse и wildcard-пути возвращает пустой список,
+          # из-за чего файл сумм молча не создавался (v0.4.0–v0.12.2).
+          $hashes = Get-ChildItem artifacts -File |
+            Where-Object { $_.Extension -in '.exe', '.zip' } |
+            ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash, $_.Name }
+          if (@($hashes).Count -lt 2) { throw "Checksums: expected hashes for at least 2 artifacts, got $($hashes.Count)" }
+          $hashes | Set-Content artifacts/SHA256SUMS.txt -Encoding utf8
+          if (-not (Test-Path artifacts/SHA256SUMS.txt)) { throw "Checksums: SHA256SUMS.txt was not created" }
+          Write-Host "--- SHA256SUMS.txt ---"
+          Get-Content artifacts/SHA256SUMS.txt | Write-Host
 
       # Optional: needs a free VirusTotal API key in repository secrets.
       - name: VirusTotal pre-flight
