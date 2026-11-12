@@ -16,6 +16,62 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--mic-diag"))
+        {
+            var report = new System.Text.StringBuilder();
+
+            try
+            {
+                using (var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator())
+                {
+                    foreach (var device in enumerator.EnumerateAudioEndPoints(
+                                 NAudio.CoreAudioApi.DataFlow.Capture,
+                                 NAudio.CoreAudioApi.DeviceState.Active))
+                    {
+                        var volume = device.AudioEndpointVolume;
+                        volume.Mute = false;
+                        volume.MasterVolumeLevelScalar = 0.5f;
+                        report.AppendLine($"endpoint: {device.FriendlyName} | vol={volume.MasterVolumeLevelScalar:P0} | mute={volume.Mute}");
+                    }
+                }
+
+                foreach (var rate in new[] { 16000, 48000 })
+                {
+                    using var recorder = new Dictum.Audio.AudioRecorder();
+                    recorder.Start(0, rate);
+                    System.Threading.Thread.Sleep(3000);
+                    var pcm = recorder.Stop();
+
+                    var peak = Dictum.Audio.AudioNormalizer.Peak(pcm);
+                    var samples = pcm.Length / 2;
+                    double sum = 0;
+
+                    for (var i = 0; i < samples; i++)
+                    {
+                        var value = BitConverter.ToInt16(pcm, i * 2);
+                        sum += (double)value * value;
+                    }
+
+                    var rms = samples > 0 ? Math.Sqrt(sum / samples) : 0;
+                    var (start, end) = Dictum.Audio.Vad.FindSpeech(pcm);
+                    report.AppendLine($"{rate} Hz: samples={samples} peak={peak} rms={rms:F0} vad={start / (double)rate:F2}..{end / (double)rate:F2}");
+                }
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine("error: " + ex);
+            }
+
+            var diagPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum",
+                "mic-diag.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(diagPath)!);
+            System.IO.File.WriteAllText(diagPath, report.ToString());
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Contains("--benchmark"))
         {
             var report = new System.Text.StringBuilder();

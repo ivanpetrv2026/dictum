@@ -128,7 +128,17 @@ public sealed class AppController : IDisposable
         }
 
         var peak = AudioNormalizer.Peak(pcm);
-        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), gain {gainDb:F1} dB");
+        var rms = AudioStats.Rms(pcm);
+        var zcr = AudioStats.ZeroCrossingRate(pcm);
+        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), rms={rms:F0}, zcr={zcr:F3}, gain {gainDb:F1} dB");
+
+        // A floating jack hums at mains frequency: loud but with almost no
+        // zero crossings. Whisper turns that into hallucinations.
+        if (rms > 3000 && zcr < 0.02)
+        {
+            Log.Write($"audio: looks like a disconnected/humming input (rms={rms:F0}, zcr={zcr:F3}), skipped");
+            return;
+        }
 
         var (speechStart, speechEnd) = Vad.FindSpeech(pcm);
         var speechSamples = speechEnd - speechStart;
