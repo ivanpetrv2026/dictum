@@ -156,7 +156,7 @@ public sealed class AiCleanup
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey);
 
-    public async Task<string?> CleanAsync(string text, int timeoutSeconds)
+    public async Task<string?> CleanAsync(string text, int timeoutSeconds, string? appContext = null)
     {
         if (!IsConfigured || string.IsNullOrWhiteSpace(text))
         {
@@ -172,9 +172,14 @@ public sealed class AiCleanup
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 2, 30)));
+
+            var systemPrompt = string.IsNullOrWhiteSpace(appContext)
+                ? SystemPrompt
+                : SystemPrompt + $" Пользователь диктует в приложении «{appContext}»: учитывай это только для стиля и оформления, не упоминай приложение в тексте.";
+
             var raw = IsGemini(_provider)
-                ? await CallGeminiAsync(text, timeout.Token).ConfigureAwait(false)
-                : await CallOpenAiAsync(text, timeout.Token).ConfigureAwait(false);
+                ? await CallGeminiAsync(text, systemPrompt, timeout.Token).ConfigureAwait(false)
+                : await CallOpenAiAsync(text, systemPrompt, timeout.Token).ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(raw))
             {
@@ -198,7 +203,7 @@ public sealed class AiCleanup
         }
     }
 
-    private async Task<string?> CallOpenAiAsync(string text, CancellationToken token)
+    private async Task<string?> CallOpenAiAsync(string text, string systemPrompt, CancellationToken token)
     {
         var payload = new
         {
@@ -207,7 +212,7 @@ public sealed class AiCleanup
             max_tokens = 800,
             messages = new object[]
             {
-                new { role = "system", content = SystemPrompt },
+                new { role = "system", content = systemPrompt },
                 new { role = "user", content = "<<<TEXT>>>\n" + text + "\n<<<END>>>" }
             }
         };
@@ -241,7 +246,7 @@ public sealed class AiCleanup
             .GetString();
     }
 
-    private async Task<string?> CallGeminiAsync(string text, CancellationToken token)
+    private async Task<string?> CallGeminiAsync(string text, string systemPrompt, CancellationToken token)
     {
         var urlBuilder = new UriBuilder(_endpoint.TrimEnd('/') + "/models/" + Uri.EscapeDataString(_model) + ":generateContent");
         urlBuilder.Query = "key" + "=" + Uri.EscapeDataString(_apiKey);
@@ -251,7 +256,7 @@ public sealed class AiCleanup
         {
             system_instruction = new
             {
-                parts = new[] { new { text = SystemPrompt } }
+                parts = new[] { new { text = systemPrompt } }
             },
             contents = new object[]
             {

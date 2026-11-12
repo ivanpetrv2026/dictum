@@ -13,8 +13,8 @@
     <RootNamespace>Dictum</RootNamespace>
     <Product>Dictum</Product>
     <AssemblyTitle>Dictum — local voice dictation</AssemblyTitle>
-    <Version>0.8.0</Version>
-    <FileVersion>0.8.0.0</FileVersion>
+    <Version>0.9.0</Version>
+    <FileVersion>0.9.0.0</FileVersion>
     <Company>Your Name</Company>
     <Copyright>MIT</Copyright>
     <InvariantGlobalization>false</InvariantGlobalization>

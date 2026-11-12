@@ -15,6 +15,58 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--vad-test"))
+        {
+            var report = new System.Text.StringBuilder();
+
+            try
+            {
+                var index = Array.IndexOf(e.Args, "--vad-test");
+                var file = index + 1 < e.Args.Length ? e.Args[index + 1] : string.Empty;
+                var bytes = System.IO.File.ReadAllBytes(file);
+
+                var dataIndex = -1;
+                for (var i = 12; i < bytes.Length - 8; i++)
+                {
+                    if (bytes[i] == (byte)'d' && bytes[i + 1] == (byte)'a' && bytes[i + 2] == (byte)'t' && bytes[i + 3] == (byte)'a')
+                    {
+                        dataIndex = i + 8;
+                        break;
+                    }
+                }
+
+                if (dataIndex < 0)
+                {
+                    throw new InvalidOperationException("no data chunk");
+                }
+
+                var pcm = new byte[bytes.Length - dataIndex];
+                Array.Copy(bytes, dataIndex, pcm, 0, pcm.Length);
+
+                var (start, end) = Dictum.Audio.Vad.FindSpeech(pcm);
+                var trimmed = new byte[(end - start) * 2];
+                Array.Copy(pcm, start * 2, trimmed, 0, trimmed.Length);
+                var (_, gain) = Dictum.Audio.AudioNormalizer.Normalize(trimmed);
+
+                report.AppendLine($"total: {pcm.Length / 32000.0:F2}s");
+                report.AppendLine($"speech: {start / 16000.0:F2}s .. {end / 16000.0:F2}s ({(end - start) / 16000.0:F2}s)");
+                report.AppendLine($"gain: {gain:F1} dB");
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine("error: " + ex);
+            }
+
+            var reportPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum",
+                "vad-test.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(reportPath)!);
+            System.IO.File.WriteAllText(reportPath, report.ToString());
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Contains("--setup"))
         {
             _controller = new AppController();

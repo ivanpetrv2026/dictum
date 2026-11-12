@@ -30,6 +30,7 @@ public sealed class AppController : IDisposable
     private AppSettings _settings;
     private WhisperTranscriber? _transcriber;
     private RecordingIndicator? _indicator;
+    private string _targetApp = string.Empty;
     private nint _targetWindow;
     private DateTime _recordedAt;
     private bool _busy;
@@ -69,6 +70,7 @@ public sealed class AppController : IDisposable
         }
 
         _targetWindow = _injector.CaptureTarget();
+        _targetApp = WindowInfo.ProcessName(_targetWindow);
         _recordedAt = DateTime.UtcNow;
 
         try
@@ -115,10 +117,29 @@ public sealed class AppController : IDisposable
             return;
         }
 
-        if ((DateTime.UtcNow - _recordedAt).TotalMilliseconds < _settings.MinRecordMs)
+        var (speechStart, speechEnd) = Vad.FindSpeech(pcm);
+        var speechSamples = speechEnd - speechStart;
+
+        if (speechSamples < 16_000 * 0.25)
         {
+            Log.Write($"vad: no speech in {pcm.Length / 32000.0:F1}s, skipped");
             return;
         }
+
+        if (speechStart > 0 || speechEnd < pcm.Length / 2)
+        {
+            var trimmed = new byte[speechSamples * 2];
+            Array.Copy(pcm, speechStart * 2, trimmed, 0, trimmed.Length);
+            pcm = trimmed;
+        }
+
+        var (normalized, gainDb) = AudioNormalizer.Normalize(pcm);
+        if (gainDb > 0.1)
+        {
+            pcm = normalized;
+        }
+
+        Log.Write($"vad: speech {speechSamples / 16000.0:F1}s, gain {gainDb:F1} dB, app='{_targetApp}'");
 
         _busy = true;
         try
@@ -322,7 +343,7 @@ public sealed class AppController : IDisposable
             return null;
         }
 
-        return await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds);
+        return await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds, _targetApp);
     }
 
     private AiCleanup GetCleanup(string provider, string model, string endpoint)
