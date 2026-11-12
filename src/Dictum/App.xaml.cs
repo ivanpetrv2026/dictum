@@ -15,6 +15,24 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--polish-test"))
+        {
+            var index = Array.IndexOf(e.Args, "--polish-test");
+            var sample = index + 1 < e.Args.Length
+                ? e.Args[index + 1]
+                : "привет как дела запятая что нового вопросительный знак новая строка все хорошо";
+
+            var polished = Dictum.Services.LocalPolisher.Polish(sample);
+            var reportPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum",
+                "polish-test.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(reportPath)!);
+            System.IO.File.WriteAllText(reportPath, "in : " + sample + Environment.NewLine + "out: " + polished);
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Contains("--vad-test"))
         {
             var report = new System.Text.StringBuilder();

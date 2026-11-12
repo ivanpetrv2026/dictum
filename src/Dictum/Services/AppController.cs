@@ -298,13 +298,13 @@ public sealed class AppController : IDisposable
     {
         if (!_settings.AiEnabled)
         {
-            return text;
+            return LocalPolisher.Polish(text);
         }
 
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
         if (words < _settings.AiMinWords)
         {
-            return text;
+            return LocalPolisher.Polish(text);
         }
 
         var primary = await RunCleanupAsync(_settings.AiProvider, _settings.AiModel, _settings.AiBaseUrl, text);
@@ -331,7 +331,7 @@ public sealed class AppController : IDisposable
             }
         }
 
-        return text;
+        return LocalPolisher.Polish(text);
     }
 
     private async Task<string?> RunCleanupAsync(string provider, string model, string endpoint, string text)
