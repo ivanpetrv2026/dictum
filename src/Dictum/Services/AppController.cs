@@ -22,6 +22,9 @@ public sealed class AppController : IDisposable
     private readonly VocabularyStore _vocabularyStore = new();
     private readonly StatsStore _statsStore = new();
     private readonly TranscriptStore _transcripts = new();
+    private readonly ProfileStore _profileStore = new();
+
+    private List<AppProfile> _profiles;
 
     private List<VocabularyTerm> _vocabulary;
     private TermCorrector _corrector;
@@ -38,6 +41,7 @@ public sealed class AppController : IDisposable
     public AppController()
     {
         _settings = _store.Load();
+        _profiles = _profileStore.Load();
         _vocabulary = _vocabularyStore.Load();
         _corrector = new TermCorrector(_vocabulary);
         _prompt = BuildPrompt();
@@ -194,8 +198,27 @@ public sealed class AppController : IDisposable
     /// </summary>
     private string BuildWhisperPrompt()
     {
-        var hint = ContextHint(_targetApp);
+        var profile = ProfileStore.Resolve(_profiles, _targetApp);
+        var hint = profile?.Hint ?? string.Empty;
         return string.IsNullOrWhiteSpace(hint) ? _prompt : _prompt + " " + hint;
+    }
+
+    private string BuildAiContext()
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_targetApp))
+        {
+            parts.Add($"приложение «{_targetApp}»");
+        }
+
+        var profile = ProfileStore.Resolve(_profiles, _targetApp);
+        if (profile is not null && !string.IsNullOrWhiteSpace(profile.Style))
+        {
+            parts.Add(profile.Style);
+        }
+
+        return string.Join(". ", parts);
     }
 
     private static string ContextHint(string app)
@@ -315,7 +338,7 @@ public sealed class AppController : IDisposable
 
     public void ShowSettings()
     {
-        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load(), RunBenchmarkAsync);        if (window.ShowDialog() != true)
+        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load(), RunBenchmarkAsync, _profiles);        if (window.ShowDialog() != true)
         {
             return;
         }
@@ -329,6 +352,9 @@ public sealed class AppController : IDisposable
 
         _vocabulary = window.ResultTerms;
         _vocabularyStore.Save(_vocabulary);
+
+        _profiles = window.ResultProfiles;
+        _profileStore.Save(_profiles);
         _corrector = new TermCorrector(_vocabulary);
         _prompt = BuildPrompt();
 
@@ -386,7 +412,7 @@ public sealed class AppController : IDisposable
             return null;
         }
 
-        return await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds, _targetApp);
+        return await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds, BuildAiContext());
     }
 
     private AiCleanup GetCleanup(string provider, string model, string endpoint)

@@ -24,9 +24,15 @@ public partial class SettingsWindow : Window
     private readonly List<VocabularyTerm> _originalTerms;
     private readonly StatsSnapshot _stats;
     private readonly Func<Task<BenchmarkResult>> _benchmark;
+    private readonly List<AppProfile> _originalProfiles;
     private readonly bool _initializing;
 
-    public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms, StatsSnapshot stats, Func<Task<BenchmarkResult>> benchmark)
+    public SettingsWindow(
+        AppSettings settings,
+        IEnumerable<VocabularyTerm> terms,
+        StatsSnapshot stats,
+        Func<Task<BenchmarkResult>> benchmark,
+        IEnumerable<AppProfile> profiles)
     {
         InitializeComponent();
         _initializing = true;
@@ -34,6 +40,13 @@ public partial class SettingsWindow : Window
         _settings = settings;
         _stats = stats;
         _benchmark = benchmark;
+        _originalProfiles = profiles.Select(p => new AppProfile
+        {
+            Name = p.Name,
+            Matches = new List<string>(p.Matches),
+            Style = p.Style,
+            Hint = p.Hint
+        }).ToList();
         _originalTerms = terms
             .Select(term => new VocabularyTerm
             {
@@ -53,6 +66,7 @@ public partial class SettingsWindow : Window
         AiModelBox.ItemsSource = AiCleanup.ModelsFor(settings.AiProvider);
         AiModelBox.Text = settings.AiModel;
         TermsBox.Text = FormatTerms(_originalTerms);
+        ProfilesBox.Text = FormatProfiles(_originalProfiles);
 
         foreach (ComboBoxItem item in AiProviderBox.Items)
         {
@@ -85,6 +99,53 @@ public partial class SettingsWindow : Window
     public AppSettings Result => _settings;
 
     public List<VocabularyTerm> ResultTerms { get; private set; } = new();
+
+    public List<AppProfile> ResultProfiles { get; private set; } = new();
+
+    private static string FormatProfiles(IEnumerable<AppProfile> profiles) =>
+        string.Join(
+            Environment.NewLine,
+            profiles.Select(profile =>
+                $"{profile.Name} | {string.Join(", ", profile.Matches)} | {profile.Style}"));
+
+    private List<AppProfile> ParseProfiles(string text)
+    {
+        var result = new List<AppProfile>();
+
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var parts = line.Split('|');
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            var name = parts[0].Trim();
+            var matches = parts[1]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => value.Trim())
+                .Where(value => value.Length > 0)
+                .ToList();
+
+            if (name.Length == 0 || matches.Count == 0)
+            {
+                continue;
+            }
+
+            var style = parts.Length > 2 ? parts[2].Trim() : string.Empty;
+            var hint = _originalProfiles.FirstOrDefault(profile => profile.Name == name)?.Hint ?? style;
+
+            result.Add(new AppProfile { Name = name, Matches = matches, Style = style, Hint = hint });
+        }
+
+        return result;
+    }
 
     private static string ProviderName(string tag) =>
         Providers.FirstOrDefault(provider => provider.Tag == tag).Name ?? tag;
@@ -590,6 +651,7 @@ public partial class SettingsWindow : Window
             : AiFallbackModelBox.Text.Trim();
 
         ResultTerms = ParseTerms(TermsBox.Text);
+        ResultProfiles = ParseProfiles(ProfilesBox.Text);
         DialogResult = true;
     }
 

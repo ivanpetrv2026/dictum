@@ -118,6 +118,31 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="Профили">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+                        <TextBlock FontSize="18" FontWeight="Bold" Text="Профили приложений" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="По одному профилю в строке: «Название | совпадения через запятую | стиль». Совпадение ищется по имени процесса (code, telegram, outlook). Стиль уходит в ИИ-очистку, а подсказка для Whisper берётся из сохранённого профиля с тем же названием." />
+                        <TextBox x:Name="ProfilesBox"
+                                 Height="150"
+                                 Margin="0,14,0,0"
+                                 AcceptsReturn="True"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto" />
+                        <TextBlock Margin="0,10,0,0"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Пример: Код | code, devenv, rider | Технический стиль, сохраняй имена функций и переменных." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Настройки">                <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid Margin="20">
                         <Grid.RowDefinitions>

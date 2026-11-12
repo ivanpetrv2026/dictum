@@ -175,7 +175,7 @@ public sealed class AiCleanup
 
             var systemPrompt = string.IsNullOrWhiteSpace(appContext)
                 ? SystemPrompt
-                : SystemPrompt + $" Пользователь диктует в приложении «{appContext}»: учитывай это только для стиля и оформления, не упоминай приложение в тексте.";
+                : SystemPrompt + $" Дополнительный контекст: {appContext}. Учитывай его только для стиля и оформления, не упоминай в тексте.";
 
             var raw = IsGemini(_provider)
                 ? await CallGeminiAsync(text, systemPrompt, timeout.Token).ConfigureAwait(false)
