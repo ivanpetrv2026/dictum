@@ -26,7 +26,7 @@ public sealed class WhisperTranscriber : IDisposable
         _prompt = string.IsNullOrWhiteSpace(prompt) ? null : prompt;
     }
 
-    public async Task<string> TranscribeAsync(byte[] pcm16KhzMono, CancellationToken cancellationToken = default)
+    public async Task<string> TranscribeAsync(byte[] pcm16KhzMono, string? promptOverride = null, CancellationToken cancellationToken = default)
     {
         if (pcm16KhzMono.Length == 0)
         {
@@ -34,10 +34,12 @@ public sealed class WhisperTranscriber : IDisposable
         }
 
         var builder = _factory.CreateBuilder().WithLanguage(_language);
-        if (_prompt is not null)
+        var prompt = string.IsNullOrWhiteSpace(promptOverride) ? _prompt : promptOverride;
+
+        if (!string.IsNullOrWhiteSpace(prompt))
         {
-            // Biases the decoder towards the dictionary spellings (ClickHouse, API, Jira...).
-            builder = builder.WithPrompt(_prompt);
+            // Biases the decoder towards the dictionary spellings and the current app context.
+            builder = builder.WithPrompt(prompt);
         }
 
         using var processor = builder.Build();

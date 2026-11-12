@@ -3,6 +3,7 @@ using System.Windows;
 using Dictum.Services;
 using Dictum.Settings;
 using Dictum.Views;
+using Dictum.Vocabulary;
 
 namespace Dictum;
 
@@ -14,6 +15,39 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (e.Args.Contains("--benchmark"))
+        {
+            var report = new System.Text.StringBuilder();
+
+            try
+            {
+                CudaBootstrap.Prepare();
+                var current = new SettingsStore().Load();
+                var vocabulary = new VocabularyStore().Load();
+                var prompt = string.Join(", ", vocabulary.Select(term => term.Canonical).Take(30)) + ".";
+
+                var transcriber = new Dictum.Speech.WhisperTranscriber(current.ModelPath, current.Language, prompt);
+                var result = BenchmarkService.RunAsync(transcriber).GetAwaiter().GetResult();
+
+                report.AppendLine(result.Summary);
+                report.AppendLine();
+                report.AppendLine(result.Details);
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine("error: " + ex);
+            }
+
+            var benchmarkPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum",
+                "benchmark.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(benchmarkPath)!);
+            System.IO.File.WriteAllText(benchmarkPath, report.ToString());
+            Shutdown();
+            return;
+        }
 
         if (e.Args.Contains("--polish-test"))
         {

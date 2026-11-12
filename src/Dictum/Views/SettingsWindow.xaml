@@ -53,6 +53,7 @@
 
                         <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
                             <Button x:Name="TestButton" Width="170" Content="Проверить связь" Style="{StaticResource PrimaryButton}" Click="OnTestClick" />
+                            <Button x:Name="BenchmarkButton" Width="170" Margin="8,0,0,0" Content="Проверить качество" Click="OnBenchmark" />
                             <TextBlock x:Name="TestResultText"
                                        Margin="12,0,0,0"
                                        MaxWidth="500"
@@ -62,6 +63,7 @@
 
                         <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
                             <Button x:Name="OpenTranscriptsButton" Width="230" Content="Открыть папку с текстами" Click="OnOpenTranscripts" />
+                            <Button x:Name="CopyLastButton" Width="190" Margin="8,0,0,0" Content="Копировать последнюю" Click="OnCopyLast" />
                             <TextBlock x:Name="TranscriptsPathText"
                                        Margin="12,0,0,0"
                                        VerticalAlignment="Center"
@@ -70,7 +72,15 @@
                         </StackPanel>
 
                         <TextBlock Margin="0,22,0,8" FontWeight="SemiBold" Text="Последние диктовки" />
-                        <TextBlock x:Name="DashRecentText" Foreground="{StaticResource TextMutedBrush}" LineHeight="20" TextWrapping="Wrap" />
+                        <TextBox x:Name="DashRecentText"
+                                 MinHeight="110"
+                                 Padding="10"
+                                 AcceptsReturn="True"
+                                 Background="White"
+                                 BorderBrush="{StaticResource BorderBrushSoft}"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

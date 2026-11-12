@@ -23,15 +23,17 @@ public partial class SettingsWindow : Window
     private readonly AppSettings _settings;
     private readonly List<VocabularyTerm> _originalTerms;
     private readonly StatsSnapshot _stats;
+    private readonly Func<Task<BenchmarkResult>> _benchmark;
     private readonly bool _initializing;
 
-    public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms, StatsSnapshot stats)
+    public SettingsWindow(AppSettings settings, IEnumerable<VocabularyTerm> terms, StatsSnapshot stats, Func<Task<BenchmarkResult>> benchmark)
     {
         InitializeComponent();
         _initializing = true;
 
         _settings = settings;
         _stats = stats;
+        _benchmark = benchmark;
         _originalTerms = terms
             .Select(term => new VocabularyTerm
             {
@@ -426,6 +428,44 @@ public partial class SettingsWindow : Window
         }
 
         return parsed;
+    }
+
+    private async void OnBenchmark(object sender, RoutedEventArgs e)
+    {
+        BenchmarkButton.IsEnabled = false;
+        TestResultText.Text = "Прогоняю восемь фраз…";
+
+        try
+        {
+            var result = await _benchmark();
+            TestResultText.Text = result.Summary;
+            MessageBox.Show(result.Details, "Проверка качества", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            TestResultText.Text = "✗ " + ex.Message;
+        }
+        finally
+        {
+            BenchmarkButton.IsEnabled = true;
+        }
+    }
+
+    private void OnCopyLast(object sender, RoutedEventArgs e)
+    {
+        if (_stats.Recent.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(_stats.Recent[0].Text);
+        }
+        catch (Exception)
+        {
+            // Clipboard can be locked by another app; nothing to do.
+        }
     }
 
     private void OnOpenTranscripts(object sender, RoutedEventArgs e)

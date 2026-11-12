@@ -185,7 +185,41 @@ public sealed class AppController : IDisposable
     private async Task<string> TranscribeAsync(byte[] pcm)
     {
         _transcriber ??= CreateTranscriber();
-        return await _transcriber.TranscribeAsync(pcm);
+        return await _transcriber.TranscribeAsync(pcm, BuildWhisperPrompt());
+    }
+
+    /// <summary>
+    /// Dictionary terms plus a short hint about the app being dictated into.
+    /// Whisper uses the prompt as a style and vocabulary prior.
+    /// </summary>
+    private string BuildWhisperPrompt()
+    {
+        var hint = ContextHint(_targetApp);
+        return string.IsNullOrWhiteSpace(hint) ? _prompt : _prompt + " " + hint;
+    }
+
+    private static string ContextHint(string app)
+    {
+        var name = app.ToLowerInvariant();
+
+        if (name.Contains("code") || name.Contains("devenv") || name.Contains("rider")
+            || name.Contains("pycharm") || name.Contains("sublime") || name.Contains("notepad++"))
+        {
+            return "Программирование: функции, переменные, API, репозиторий, коммит.";
+        }
+
+        if (name.Contains("telegram") || name.Contains("discord") || name.Contains("slack")
+            || name.Contains("whatsapp") || name.Contains("teams") || name.Contains("viber"))
+        {
+            return "Сообщение в чате, разговорная речь.";
+        }
+
+        if (name.Contains("outlook") || name.Contains("thunderbird") || name.Contains("mail"))
+        {
+            return "Деловое письмо.";
+        }
+
+        return string.Empty;
     }
 
     private WhisperTranscriber CreateTranscriber()
@@ -256,6 +290,15 @@ public sealed class AppController : IDisposable
         return poller;
     }
 
+    public async Task<BenchmarkResult> RunBenchmarkAsync()
+    {
+        _transcriber ??= CreateTranscriber();
+        Log.Write("benchmark: started");
+        var result = await BenchmarkService.RunAsync(_transcriber);
+        Log.Write("benchmark: " + result.Summary);
+        return result;
+    }
+
     public void ShowOnboarding()
     {
         var wizard = new OnboardingWizard(_settings, _store);
@@ -272,7 +315,7 @@ public sealed class AppController : IDisposable
 
     public void ShowSettings()
     {
-        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load());        if (window.ShowDialog() != true)
+        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load(), RunBenchmarkAsync);        if (window.ShowDialog() != true)
         {
             return;
         }
