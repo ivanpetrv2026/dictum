@@ -10,7 +10,7 @@ namespace Dictum.Audio;
 /// </summary>
 public static class AudioStats
 {
-    public sealed record Metrics(double Rms, double Zcr, double Flatness);
+    public sealed record Metrics(double Rms, double Zcr, double Flatness, double LowBand, double HighBand);
 
     public static double Rms(byte[] pcm)
     {
@@ -69,7 +69,7 @@ public static class AudioStats
         var samples = pcm.Length / 2;
         if (samples == 0)
         {
-            return new Metrics(0, 0, 1);
+            return new Metrics(0, 0, 1, 0, 0);
         }
 
         double dc = 0;
@@ -125,14 +125,56 @@ public static class AudioStats
         return new Metrics(
             Math.Sqrt(sum / samples),
             (double)crossings / samples,
-            flatness);
+            flatness,
+            BandEnergy(pcm, samples, MainsBand),
+            BandEnergy(pcm, samples, SpeechBand));
+    }
+
+    private static readonly int[] MainsBand = { 50, 100, 150 };
+    private static readonly int[] SpeechBand = { 800, 1200, 2000 };
+
+    /// <summary>
+    /// RMS amplitude at the given frequencies over the whole take (Goertzel).
+    /// Mains hum lives at 50-150 Hz; human speech always carries 800-2000 Hz
+    /// formants and fricative noise, even from a bass voice.
+    /// </summary>
+    private static double BandEnergy(byte[] pcm, int samples, int[] frequencies)
+    {
+        if (samples < 64)
+        {
+            return 0;
+        }
+
+        double total = 0;
+        foreach (var freq in frequencies)
+        {
+            var w = 2 * Math.PI * freq / 16000;
+            var coeff = 2 * Math.Cos(w);
+            double s1 = 0, s2 = 0;
+
+            for (var i = 0; i < samples; i++)
+            {
+                var s0 = BitConverter.ToInt16(pcm, i * 2) + coeff * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+
+            total += Math.Sqrt(Math.Max(0, s1 * s1 + s2 * s2 - coeff * s1 * s2)) / samples;
+        }
+
+        return total;
     }
 
     /// <summary>
-    /// A floating jack signature: loud, almost no zero crossings and a flat
-    /// envelope. All three conditions are required so that a real
-    /// low-pitched voice (its ZCR can dip below 0.02) is never rejected.
+    /// A floating jack signature: loud, almost no zero crossings, and either
+    /// a flat envelope or energy confined to the mains band with an empty
+    /// speech band. An intermittent contact produces hum bursts that defeat
+    /// the envelope check, so the spectral test catches them too. Observed
+    /// band ratios: mains hum 0.002-0.004, any real voice 0.03+, so the
+    /// 0.02 threshold sits between the classes with margin on both sides.
     /// </summary>
     public static bool LooksLikeHum(Metrics metrics)
-        => metrics.Rms > 3000 && metrics.Zcr < 0.02 && metrics.Flatness < 2.5;
+        => metrics.Rms > 3000
+           && metrics.Zcr < 0.02
+           && (metrics.Flatness < 2.5 || metrics.HighBand < 0.02 * metrics.LowBand);
 }

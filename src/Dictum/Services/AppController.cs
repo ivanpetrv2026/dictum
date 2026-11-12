@@ -149,7 +149,7 @@ public sealed class AppController : IDisposable
 
         var peak = AudioNormalizer.Peak(pcm);
         var stats = AudioStats.Analyze(pcm);
-        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), rms={stats.Rms:F0}, zcr={stats.Zcr:F3}, flatness={stats.Flatness:F1}, gain {gainDb:F1} dB");
+        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), rms={stats.Rms:F0}, zcr={stats.Zcr:F3}, flatness={stats.Flatness:F1}, bands={stats.LowBand:F0}/{stats.HighBand:F0}, gain {gainDb:F1} dB");
 
         // A floating jack hums at mains frequency: loud, almost no zero
         // crossings, flat envelope. Whisper turns that into hallucinations.

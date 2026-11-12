@@ -44,7 +44,7 @@ public partial class App : System.Windows.Application
                     var peak = Dictum.Audio.AudioNormalizer.Peak(pcm);
                     var stats = Dictum.Audio.AudioStats.Analyze(pcm);
                     var (start, end) = Dictum.Audio.Vad.FindSpeech(pcm);
-                    report.AppendLine($"{rate} Hz: samples={pcm.Length / 2} peak={peak} rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1} vad={start / (double)rate:F2}..{end / (double)rate:F2}");
+                    report.AppendLine($"{rate} Hz: samples={pcm.Length / 2} peak={peak} rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1} bands={stats.LowBand:F0}/{stats.HighBand:F0} vad={start / (double)rate:F2}..{end / (double)rate:F2}");
 
                     if (Dictum.Audio.AudioStats.LooksLikeHum(stats))
                     {
@@ -166,7 +166,7 @@ public partial class App : System.Windows.Application
                 report.AppendLine($"total: {pcm.Length / 32000.0:F2}s, peak {peak}");
                 report.AppendLine($"speech: {start / 16000.0:F2}s .. {end / 16000.0:F2}s ({(end - start) / 16000.0:F2}s)");
                 report.AppendLine($"gain: {gain:F1} dB");
-                report.AppendLine($"signal: rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1}");
+                report.AppendLine($"signal: rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1} bands={stats.LowBand:F0}/{stats.HighBand:F0}");
                 report.AppendLine(Dictum.Audio.AudioStats.LooksLikeHum(stats)
                     ? "verdict: humming input — check the plug and cable, try another jack"
                     : "verdict: looks like speech or normal audio");
