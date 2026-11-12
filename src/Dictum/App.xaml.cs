@@ -95,12 +95,11 @@ public partial class App : System.Windows.Application
                 var pcm = new byte[bytes.Length - dataIndex];
                 Array.Copy(bytes, dataIndex, pcm, 0, pcm.Length);
 
-                var (start, end) = Dictum.Audio.Vad.FindSpeech(pcm);
-                var trimmed = new byte[(end - start) * 2];
-                Array.Copy(pcm, start * 2, trimmed, 0, trimmed.Length);
-                var (_, gain) = Dictum.Audio.AudioNormalizer.Normalize(trimmed);
+                var (normalized, gain) = Dictum.Audio.AudioNormalizer.Normalize(pcm);
+                var (start, end) = Dictum.Audio.Vad.FindSpeech(normalized);
+                var peak = Dictum.Audio.AudioNormalizer.Peak(pcm);
 
-                report.AppendLine($"total: {pcm.Length / 32000.0:F2}s");
+                report.AppendLine($"total: {pcm.Length / 32000.0:F2}s, peak {peak}");
                 report.AppendLine($"speech: {start / 16000.0:F2}s .. {end / 16000.0:F2}s ({(end - start) / 16000.0:F2}s)");
                 report.AppendLine($"gain: {gain:F1} dB");
             }

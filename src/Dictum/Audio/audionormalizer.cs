@@ -8,6 +8,23 @@ namespace Dictum.Audio;
 /// </summary>
 public static class AudioNormalizer
 {
+    public static int Peak(byte[] pcm)
+    {
+        var samples = pcm.Length / 2;
+        var peak = 0;
+
+        for (var i = 0; i < samples; i++)
+        {
+            var value = Math.Abs((int)BitConverter.ToInt16(pcm, i * 2));
+            if (value > peak)
+            {
+                peak = value;
+            }
+        }
+
+        return peak;
+    }
+
     public static (byte[] Pcm, double GainDb) Normalize(
         byte[] pcm,
         double targetPeakDb = -3.0,
@@ -19,16 +36,7 @@ public static class AudioNormalizer
             return (pcm, 0);
         }
 
-        var peak = 0;
-
-        for (var i = 0; i < samples; i++)
-        {
-            var value = Math.Abs((int)BitConverter.ToInt16(pcm, i * 2));
-            if (value > peak)
-            {
-                peak = value;
-            }
-        }
+        var peak = Peak(pcm);
 
         if (peak < 40)
         {

@@ -121,13 +121,32 @@ public sealed class AppController : IDisposable
             return;
         }
 
+        var (normalized, gainDb) = AudioNormalizer.Normalize(pcm);
+        if (gainDb > 0.1)
+        {
+            pcm = normalized;
+        }
+
+        var peak = AudioNormalizer.Peak(pcm);
+        Log.Write($"audio: peak={peak} ({peak / 32768.0:P0}), gain {gainDb:F1} dB");
+
         var (speechStart, speechEnd) = Vad.FindSpeech(pcm);
         var speechSamples = speechEnd - speechStart;
 
         if (speechSamples < 16_000 * 0.25)
         {
-            Log.Write($"vad: no speech in {pcm.Length / 32000.0:F1}s, skipped");
-            return;
+            // Very quiet recordings can defeat the detector; if there is still
+            // measurable energy, let the model try instead of dropping the take.
+            if (peak < 800)
+            {
+                Log.Write($"vad: no speech in {pcm.Length / 32000.0:F1}s (peak {peak}), skipped");
+                return;
+            }
+
+            Log.Write($"vad: detector found nothing, but peak={peak} — sending the whole take");
+            speechStart = 0;
+            speechEnd = pcm.Length / 2;
+            speechSamples = speechEnd;
         }
 
         if (speechStart > 0 || speechEnd < pcm.Length / 2)
@@ -135,12 +154,6 @@ public sealed class AppController : IDisposable
             var trimmed = new byte[speechSamples * 2];
             Array.Copy(pcm, speechStart * 2, trimmed, 0, trimmed.Length);
             pcm = trimmed;
-        }
-
-        var (normalized, gainDb) = AudioNormalizer.Normalize(pcm);
-        if (gainDb > 0.1)
-        {
-            pcm = normalized;
         }
 
         Log.Write($"vad: speech {speechSamples / 16000.0:F1}s, gain {gainDb:F1} dB, app='{_targetApp}'");

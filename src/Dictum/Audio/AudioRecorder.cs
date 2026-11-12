@@ -1,4 +1,5 @@
 using System.IO;
+using Dictum.Services;
 using NAudio.Wave;
 
 namespace Dictum.Audio;
@@ -24,9 +25,13 @@ public sealed class AudioRecorder : IDisposable
 
         _buffer = new MemoryStream();
 
+        var selectedDevice = deviceNumber < 0 ? 0 : deviceNumber;
+        var deviceName = WaveInEvent.GetCapabilities(selectedDevice).ProductName;
+        Log.Write($"audio: device {selectedDevice} = '{deviceName}'");
+
         _waveIn = new WaveInEvent
         {
-            DeviceNumber = deviceNumber < 0 ? 0 : deviceNumber,
+            DeviceNumber = selectedDevice,
             WaveFormat = new WaveFormat(16000, 16, 1),
             BufferMilliseconds = 50,
             NumberOfBuffers = 4

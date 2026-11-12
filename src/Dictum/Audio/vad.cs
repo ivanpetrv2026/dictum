@@ -46,7 +46,7 @@ public static class Vad
 
         var noise = sorted[Math.Max(0, (int)(sorted.Length * 0.2))];
         var peak = sorted[^1];
-        var threshold = Math.Max(Math.Max(noise * 2.5, peak * 0.08), 120);
+        var threshold = Math.Max(Math.Max(noise * 2.5, peak * 0.06), 60);
 
         var first = -1;
         var last = -1;
