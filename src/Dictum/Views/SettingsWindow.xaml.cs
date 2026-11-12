@@ -42,6 +42,7 @@ public partial class SettingsWindow : Window
 
         ModelPathBox.Text = settings.ModelPath;
         LearnBox.IsChecked = settings.LearnEnabled;
+        SaveTranscriptsBox.IsChecked = settings.SaveTranscripts;
         AiBox.IsChecked = settings.AiEnabled;
         AiModelBox.Text = settings.AiModel;
         AiBaseUrlBox.Text = settings.AiBaseUrl;
@@ -109,6 +110,8 @@ public partial class SettingsWindow : Window
         }
 
         DashKeysText.Text = line;
+
+        TranscriptsPathText.Text = new TranscriptStore().Directory;
 
         DashRecentText.Text = _stats.Recent.Count == 0
             ? "Пока пусто — продиктуй первую фразу."
@@ -425,6 +428,20 @@ public partial class SettingsWindow : Window
         return parsed;
     }
 
+    private void OnOpenTranscripts(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var directory = new TranscriptStore().Directory;
+            Directory.CreateDirectory(directory);
+            Process.Start(new ProcessStartInfo { FileName = directory, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Не удалось открыть папку", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void OnProviderChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_initializing)
@@ -518,6 +535,7 @@ public partial class SettingsWindow : Window
         _settings.ModelPath = ModelPathBox.Text.Trim();
         _settings.Language = (LanguageBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "ru";
         _settings.LearnEnabled = LearnBox.IsChecked == true;
+        _settings.SaveTranscripts = SaveTranscriptsBox.IsChecked == true;
         _settings.AiEnabled = AiBox.IsChecked == true;
         _settings.AiProvider = (AiProviderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "openrouter";
         _settings.AiModel = string.IsNullOrWhiteSpace(AiModelBox.Text)

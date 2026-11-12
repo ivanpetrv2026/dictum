@@ -60,6 +60,15 @@
                                        TextWrapping="Wrap" />
                         </StackPanel>
 
+                        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                            <Button x:Name="OpenTranscriptsButton" Width="230" Content="Открыть папку с текстами" Click="OnOpenTranscripts" />
+                            <TextBlock x:Name="TranscriptsPathText"
+                                       Margin="12,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
                         <TextBlock Margin="0,22,0,8" FontWeight="SemiBold" Text="Последние диктовки" />
                         <TextBlock x:Name="DashRecentText" Foreground="{StaticResource TextMutedBrush}" LineHeight="20" TextWrapping="Wrap" />
                     </StackPanel>
@@ -199,6 +208,10 @@
                                     <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Модель Gemini:" />
                                     <TextBox x:Name="AiFallbackModelBox" Grid.Column="1" />
                                 </Grid>
+
+                                <CheckBox x:Name="SaveTranscriptsBox"
+                                          Margin="0,12,0,0"
+                                          Content="Сохранять распознанные тексты в txt по дням" />
                             </StackPanel>
                         </Border>
 

@@ -21,6 +21,7 @@ public sealed class AppController : IDisposable
     private readonly TrayIcon _tray = new();
     private readonly VocabularyStore _vocabularyStore = new();
     private readonly StatsStore _statsStore = new();
+    private readonly TranscriptStore _transcripts = new();
 
     private List<VocabularyTerm> _vocabulary;
     private TermCorrector _corrector;
@@ -141,6 +142,12 @@ public sealed class AppController : IDisposable
             await Task.Delay(120);
             _injector.TypeText(final + " ");
             _statsStore.Record(final);
+
+            if (_settings.SaveTranscripts)
+            {
+                Log.Write("transcript: " + _transcripts.Append(final));
+            }
+
             LearnFromEdits(final);
         }
         catch (Exception ex)

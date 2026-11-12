@@ -19,6 +19,8 @@ public sealed class AppSettings
 
     public bool LearnEnabled { get; set; } = true;
 
+    public bool SaveTranscripts { get; set; } = true;
+
     public bool AiEnabled { get; set; }
 
     public bool AiFallbackEnabled { get; set; } = true;
