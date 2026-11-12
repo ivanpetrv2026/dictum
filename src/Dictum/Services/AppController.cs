@@ -236,8 +236,7 @@ public sealed class AppController : IDisposable
             return;
         }
 
-        _hotkey.Dispose();
-        _hotkey = CreatePoller();
+        _hotkey.Update(HotkeyDefinition.Parse(_settings.HotkeyPreset));
         _transcriber?.Dispose();
         _transcriber = null;
         Log.Write($"onboarding done: model='{_settings.ModelPath}', hotkey={_settings.HotkeyPreset}, mic={_settings.AudioDevice}");
@@ -254,8 +253,8 @@ public sealed class AppController : IDisposable
         _store.Save(_settings);
         _cleanups.Clear();
 
-        _hotkey.Dispose();
-        _hotkey = CreatePoller();
+        _hotkey.Update(HotkeyDefinition.Parse(_settings.HotkeyPreset));
+        Log.Write("hotkey updated: " + _settings.HotkeyPreset);
 
         _vocabulary = window.ResultTerms;
         _vocabularyStore.Save(_vocabulary);

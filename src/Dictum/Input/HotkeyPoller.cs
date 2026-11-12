@@ -11,7 +11,7 @@ namespace Dictum.Input;
 public sealed class HotkeyPoller : IDisposable
 {
     private readonly DispatcherTimer _timer;
-    private readonly HotkeyDefinition _definition;
+    private HotkeyDefinition _definition;
     private bool _isDown;
 
     public event EventHandler? Pressed;
@@ -28,6 +28,17 @@ public sealed class HotkeyPoller : IDisposable
         };
         _timer.Tick += OnTick;
         _timer.Start();
+    }
+
+    /// <summary>
+    /// Swaps the chord without recreating the timer. Recreating a
+    /// DispatcherTimer from inside a modal dialog (the onboarding wizard)
+    /// leaves the poller dead until the app restarts.
+    /// </summary>
+    public void Update(HotkeyDefinition definition)
+    {
+        _definition = definition;
+        _isDown = false;
     }
 
     private void OnTick(object? sender, EventArgs e)

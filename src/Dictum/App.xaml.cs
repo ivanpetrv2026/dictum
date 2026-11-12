@@ -15,6 +15,14 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--setup"))
+        {
+            _controller = new AppController();
+            _controller.Start();
+            _controller.ShowOnboarding();
+            return;
+        }
+
         if (e.Args.Contains("--indicator-test"))
         {
             var indicator = new RecordingIndicator();
