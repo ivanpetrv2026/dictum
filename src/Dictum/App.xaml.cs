@@ -126,24 +126,15 @@ public partial class App : System.Windows.Application
 
                 var transcriber = new Dictum.Speech.WhisperTranscriber(current.ModelPath, current.Language, prompt);
                 var stats = new Dictum.Services.StatsStore().Load();
-                var references = stats.Recent
-                    .Select(entry => entry.Text)
-                    .Where(text => !string.IsNullOrWhiteSpace(text))
-                    .Distinct()
-                    .Where(text =>
-                    {
-                        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                        return words.Length >= 3 && words.Length <= 25;
-                    })
-                    .Take(5)
-                    .ToList();
+                var dataDirectory = new SettingsStore().DataDirectory;
+                var (chunk, _) = Dictum.Services.ContextChunkSelector.SelectNext(dataDirectory, stats.Recent.Select(entry => entry.Text));
 
-                if (references.Count < 2)
+                if (string.IsNullOrWhiteSpace(chunk))
                 {
                     throw new InvalidOperationException("Недостаточно фраз в истории — продиктуйте сначала пару фраз.");
                 }
 
-                var result = Dictum.Services.BenchmarkService.RunContextAsync(transcriber, references, corrector).GetAwaiter().GetResult();
+                var result = Dictum.Services.BenchmarkService.RunContextAsync(transcriber, new[] { chunk }, corrector).GetAwaiter().GetResult();
                 report.AppendLine(result.Summary);
                 report.AppendLine();
                 report.AppendLine(result.Details);

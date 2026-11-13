@@ -367,27 +367,16 @@ public sealed class AppController : IDisposable
 
     public async Task<BenchmarkService.ContextBenchmarkResult> RunContextBenchmarkAsync()
     {
-        var references = _statsStore.Load().Recent
-            .Select(entry => entry.Text)
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .Distinct()
-            .Where(text =>
-            {
-                var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                return words.Length >= 3 && words.Length <= 25;
-            })
-            .Take(5)
-            .ToList();
-
-        if (references.Count < 2)
+        var (chunk, _) = ContextChunkSelector.SelectNext(_store.DataDirectory, _statsStore.Load().Recent.Select(entry => entry.Text));
+        if (string.IsNullOrWhiteSpace(chunk))
         {
             throw new InvalidOperationException(
-                "Недостаточно фраз: продиктуйте хотя бы две фразы по 3–25 слов — контекстный бенчмарк проверяет ваши последние диктовки.");
+                "Недостаточно фраз: продиктуйте хотя бы одну фразу — контекстный бенчмарк проверяет ваши последние диктовки по 60 символов за прогон.");
         }
 
         _transcriber ??= CreateTranscriber();
-        Log.Write("context benchmark: started");
-        var result = await BenchmarkService.RunContextAsync(_transcriber, references, _corrector);
+        Log.Write($"context benchmark: started, chunk='{chunk}'");
+        var result = await BenchmarkService.RunContextAsync(_transcriber, new[] { chunk }, _corrector);
         Log.Write("context benchmark: " + result.Summary);
         return result;
     }
