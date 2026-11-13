@@ -365,6 +365,193 @@ public sealed class AppController : IDisposable
         return result;
     }
 
+    public async Task<BenchmarkService.ContextBenchmarkResult> RunContextBenchmarkAsync()
+    {
+        var references = _statsStore.Load().Recent
+            .Select(entry => entry.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Distinct()
+            .Where(text =>
+            {
+                var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                return words.Length >= 3 && words.Length <= 25;
+            })
+            .Take(5)
+            .ToList();
+
+        if (references.Count < 2)
+        {
+            throw new InvalidOperationException(
+                "Недостаточно фраз: продиктуйте хотя бы две фразы по 3–25 слов — контекстный бенчмарк проверяет ваши последние диктовки.");
+        }
+
+        _transcriber ??= CreateTranscriber();
+        Log.Write("context benchmark: started");
+        var result = await BenchmarkService.RunContextAsync(_transcriber, references, _corrector);
+        Log.Write("context benchmark: " + result.Summary);
+        return result;
+    }
+
+    /// <summary>
+    /// Public wrapper over the edit-diff learner so the context benchmark
+    /// window can remember the user's in-place corrections.
+    /// </summary>
+    public int LearnCorrection(string typed, string current) => ApplyCorrections(typed, current);
+
+    public void ShowContextBenchmark()
+    {
+        var window = BuildContextBenchmarkWindow();
+        window.ShowDialog();
+    }
+
+    private Window BuildContextBenchmarkWindow()
+    {
+        var window = new Window
+        {
+            Title = "Контекстный бенчмарк — ваши последние фразы",
+            Width = 760,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen
+        };
+        if (Application.Current.MainWindow is { } owner)
+        {
+            window.Owner = owner;
+        }
+
+        var muted = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6a, 0x6a, 0x76));
+        var root = new System.Windows.Controls.DockPanel { Margin = new Thickness(14) };
+        window.Content = root;
+
+        var status = new System.Windows.Controls.TextBlock
+        {
+            Text = "Загружаю ваши фразы…",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
+            Foreground = muted
+        };
+
+        var buttons = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal
+        };
+        System.Windows.Controls.DockPanel.SetDock(buttons, System.Windows.Controls.Dock.Bottom);
+        var saveButton = new System.Windows.Controls.Button
+        {
+            Content = "Запомнить исправления",
+            Width = 200,
+            Height = 30,
+            Margin = new Thickness(0, 8, 8, 0)
+        };
+        var closeButton = new System.Windows.Controls.Button
+        {
+            Content = "Закрыть",
+            Width = 110,
+            Height = 30,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        buttons.Children.Add(saveButton);
+        buttons.Children.Add(closeButton);
+
+        var scroll = new System.Windows.Controls.ScrollViewer { VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+        var rows = new System.Windows.Controls.StackPanel();
+        scroll.Content = rows;
+        root.Children.Add(buttons);
+        root.Children.Add(scroll);
+
+        var edits = new List<System.Windows.Controls.TextBox>();
+        BenchmarkService.ContextBenchmarkResult result = null;
+
+        async Task Reload()
+        {
+            saveButton.IsEnabled = false;
+            closeButton.IsEnabled = false;
+            status.Text = "Прогоняю ваши фразы через модель и словарь…";
+            edits.Clear();
+            rows.Children.Clear();
+
+            try
+            {
+                result = await RunContextBenchmarkAsync();
+            }
+            catch (Exception ex)
+            {
+                status.Text = "✗ " + ex.Message;
+                saveButton.IsEnabled = true;
+                closeButton.IsEnabled = true;
+                return;
+            }
+
+            status.Text = result.Summary + $"   ·   модель: {result.ModelName}, голос: {result.TtsVoice}";
+            var note = new System.Windows.Controls.TextBlock
+            {
+                Text = "«Сказано» — что вы продиктовали ранее; в поле — как это распознаётся сейчас. Исправьте ошибки в полях и нажмите «Запомнить исправления»: словарь выучит замены, и следующий прогон покажет улучшение.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 10),
+                Foreground = muted
+            };
+            rows.Children.Add(note);
+
+            foreach (var row in result.Rows)
+            {
+                rows.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = "Сказано: " + row.Reference,
+                    FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 10, 0, 4)
+                });
+                var edit = new System.Windows.Controls.TextBox
+                {
+                    Text = row.Corrected,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4)
+                };
+                edits.Add(edit);
+                rows.Children.Add(edit);
+                if (row.Recognized != row.Corrected)
+                {
+                    rows.Children.Add(new System.Windows.Controls.TextBlock
+                    {
+                        Text = "до словаря: " + row.Recognized,
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = muted
+                    });
+                }
+            }
+
+            saveButton.IsEnabled = true;
+            closeButton.IsEnabled = true;
+        }
+
+        saveButton.Click += async (_, _) =>
+        {
+            if (result is null)
+            {
+                return;
+            }
+
+            saveButton.IsEnabled = false;
+            var learned = 0;
+            for (var i = 0; i < result.Rows.Count && i < edits.Count; i++)
+            {
+                learned += LearnCorrection(result.Rows[i].Reference, edits[i].Text);
+            }
+
+            MessageBox.Show(window,
+                learned > 0
+                    ? $"Выучено замен: {learned}. Запускаю повторный прогон — увидите, как словарь исправляет эти фразы."
+                    : "Новых замен не найдено (исправления уже в словаре или слова совпадают). Запускаю повторный прогон.",
+                "Контекстный бенчмарк",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            await Reload();
+        };
+        closeButton.Click += (_, _) => window.Close();
+        window.Loaded += async (_, _) => await Reload();
+
+        return window;
+    }
+
     public void ShowOnboarding()
     {
         var wizard = new OnboardingWizard(_settings, _store);
@@ -381,7 +568,7 @@ public sealed class AppController : IDisposable
 
     public void ShowSettings()
     {
-        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load(), RunBenchmarkAsync, _profiles);        if (window.ShowDialog() != true)
+        var window = new SettingsWindow(_settings, _vocabulary, _statsStore.Load(), RunBenchmarkAsync, ShowContextBenchmark, _profiles);        if (window.ShowDialog() != true)
         {
             return;
         }

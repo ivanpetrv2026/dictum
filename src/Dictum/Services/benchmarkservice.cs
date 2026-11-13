@@ -5,6 +5,7 @@ using System.Speech.Synthesis;
 using System.Text;
 using System.Text.RegularExpressions;
 using Dictum.Speech;
+using Dictum.Vocabulary;
 
 namespace Dictum.Services;
 
@@ -84,6 +85,80 @@ public static class BenchmarkService
         var model = Path.GetFileName(transcriber.ModelPath);
         var wer = totalWords == 0 ? 0 : (double)totalErrors / totalWords;
         return new BenchmarkResult(totalErrors, totalWords, wer, stopwatch.Elapsed, details.ToString(), voiceName, model, startedAt);
+    }
+
+    /// <summary>One user phrase replayed through synthesis and recognition.</summary>
+    public sealed record ContextRow(string Reference, string Recognized, string Corrected, int Errors);
+
+    public sealed record ContextBenchmarkResult(
+        int WordErrors,
+        int Words,
+        double Wer,
+        TimeSpan Elapsed,
+        string Details,
+        IReadOnlyList<ContextRow> Rows,
+        string TtsVoice,
+        string ModelName,
+        DateTime StartedAt)
+    {
+        public string Summary =>
+            $"WER {Wer * 100:F1}%   ·   ошибок {WordErrors} из {Words}   ·   {Elapsed.TotalSeconds:F1} с   ·   {StartedAt:dd.MM HH:mm}";
+    }
+
+    /// <summary>
+    /// Replays the user's own recent dictations: a TTS voice re-reads each
+    /// phrase, Whisper recognises it, the vocabulary corrector applies the
+    /// learned variants and the result is scored against what was actually
+    /// typed. This measures the model plus the learned dictionary on the
+    /// user's real content — it deliberately does not involve the microphone,
+    /// so the number stays reproducible without speaking.
+    /// </summary>
+    public static async Task<ContextBenchmarkResult> RunContextAsync(
+        WhisperTranscriber transcriber,
+        IReadOnlyList<string> references,
+        TermCorrector corrector,
+        CancellationToken cancellationToken = default)
+    {
+        var totalErrors = 0;
+        var totalWords = 0;
+        var details = new StringBuilder();
+        var stopwatch = Stopwatch.StartNew();
+        var startedAt = DateTime.Now;
+
+        var (voiceName, hasRussianVoice) = DetectRussianVoice();
+        if (!hasRussianVoice)
+        {
+            throw new InvalidOperationException(
+                "Русский TTS-голос не найден — бенчмарк будет бессмысленным. Установите русский голос в параметрах Windows (Параметры → Время и язык → Речь) и повторите.");
+        }
+
+        var rows = new List<ContextRow>();
+
+        details.AppendLine($"Запуск: {startedAt:dd.MM.yyyy HH:mm:ss}   ·   модель: {Path.GetFileName(transcriber.ModelPath)}   ·   голос TTS: {voiceName}");
+        details.AppendLine("Синтезированный голос перечитывает ваши последние фразы: это проверка модели и словаря на вашем контексте, микрофон здесь не участвует.");
+        details.AppendLine();
+
+        foreach (var reference in references)
+        {
+            var pcm = await Task.Run(() => Synthesize(reference, voiceName), cancellationToken).ConfigureAwait(false);
+            var text = await transcriber.TranscribeAsync(pcm, null, cancellationToken).ConfigureAwait(false);
+            var corrected = corrector.Correct(text);
+
+            var errors = WordErrors(reference, corrected);
+            totalErrors += errors;
+            totalWords += Tokenize(reference).Length;
+            rows.Add(new ContextRow(reference, text, corrected, errors));
+
+            details.AppendLine("• сказано: " + reference);
+            details.AppendLine("  распознано: " + text);
+            details.AppendLine("  после словаря: " + corrected + $"   (ошибок: {errors})");
+        }
+
+        stopwatch.Stop();
+
+        var model = Path.GetFileName(transcriber.ModelPath);
+        var wer = totalWords == 0 ? 0 : (double)totalErrors / totalWords;
+        return new ContextBenchmarkResult(totalErrors, totalWords, wer, stopwatch.Elapsed, details.ToString(), rows, voiceName, model, startedAt);
     }
 
     private static (string VoiceName, bool Found) DetectRussianVoice()

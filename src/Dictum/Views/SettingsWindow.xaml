@@ -54,6 +54,7 @@
                         <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
                             <Button x:Name="TestButton" Width="170" Content="Проверить связь" Style="{StaticResource PrimaryButton}" Click="OnTestClick" />
                             <Button x:Name="BenchmarkButton" Width="170" Margin="8,0,0,0" Content="Проверить качество" Click="OnBenchmark" />
+                            <Button x:Name="ContextBenchmarkButton" Width="150" Margin="8,0,0,0" Content="Мои фразы" Click="OnContextBenchmark" />
                             <TextBlock x:Name="TestResultText"
                                        Margin="12,0,0,0"
                                        MaxWidth="500"

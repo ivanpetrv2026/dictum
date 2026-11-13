@@ -112,6 +112,57 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Contains("--context-benchmark"))
+        {
+            var report = new System.Text.StringBuilder();
+
+            try
+            {
+                CudaBootstrap.Prepare();
+                var current = new SettingsStore().Load();
+                var vocabulary = new VocabularyStore().Load();
+                var corrector = new TermCorrector(vocabulary);
+                var prompt = string.Join(", ", vocabulary.Select(term => term.Canonical).Take(30)) + ".";
+
+                var transcriber = new Dictum.Speech.WhisperTranscriber(current.ModelPath, current.Language, prompt);
+                var stats = new Dictum.Services.StatsStore().Load();
+                var references = stats.Recent
+                    .Select(entry => entry.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .Distinct()
+                    .Where(text =>
+                    {
+                        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        return words.Length >= 3 && words.Length <= 25;
+                    })
+                    .Take(5)
+                    .ToList();
+
+                if (references.Count < 2)
+                {
+                    throw new InvalidOperationException("Недостаточно фраз в истории — продиктуйте сначала пару фраз.");
+                }
+
+                var result = Dictum.Services.BenchmarkService.RunContextAsync(transcriber, references, corrector).GetAwaiter().GetResult();
+                report.AppendLine(result.Summary);
+                report.AppendLine();
+                report.AppendLine(result.Details);
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine("error: " + ex);
+            }
+
+            var contextPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum",
+                "context-benchmark.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(contextPath)!);
+            System.IO.File.WriteAllText(contextPath, report.ToString());
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Contains("--polish-test"))
         {
             var index = Array.IndexOf(e.Args, "--polish-test");

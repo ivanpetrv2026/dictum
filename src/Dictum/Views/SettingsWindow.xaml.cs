@@ -24,6 +24,7 @@ public partial class SettingsWindow : Window
     private readonly List<VocabularyTerm> _originalTerms;
     private readonly StatsSnapshot _stats;
     private readonly Func<Task<BenchmarkResult>> _benchmark;
+    private readonly Action _openContextBenchmark;
     private readonly List<AppProfile> _originalProfiles;
     private readonly bool _initializing;
 
@@ -32,6 +33,7 @@ public partial class SettingsWindow : Window
         IEnumerable<VocabularyTerm> terms,
         StatsSnapshot stats,
         Func<Task<BenchmarkResult>> benchmark,
+        Action openContextBenchmark,
         IEnumerable<AppProfile> profiles)
     {
         InitializeComponent();
@@ -40,6 +42,7 @@ public partial class SettingsWindow : Window
         _settings = settings;
         _stats = stats;
         _benchmark = benchmark;
+        _openContextBenchmark = openContextBenchmark;
         _originalProfiles = profiles.Select(p => new AppProfile
         {
             Name = p.Name,
@@ -489,6 +492,20 @@ public partial class SettingsWindow : Window
         }
 
         return parsed;
+    }
+
+    private void OnContextBenchmark(object sender, RoutedEventArgs e)
+    {
+        TestResultText.Text = "Открываю контекстный бенчмарк…";
+        try
+        {
+            _openContextBenchmark();
+            TestResultText.Text = "";
+        }
+        catch (Exception ex)
+        {
+            TestResultText.Text = "✗ " + ex.Message;
+        }
     }
 
     private async void OnBenchmark(object sender, RoutedEventArgs e)
