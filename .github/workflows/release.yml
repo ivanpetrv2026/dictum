@@ -41,7 +41,10 @@ jobs:
           -o publish
 
       # Signing is optional so the workflow stays green on forks.
-      # Configure the five AZURE_* secrets to enable it.
+      # All six AZURE_* secrets are required to enable it; SIGNING_ENABLED checks only the tenant id.
+      # azure/trusted-signing-action@v0 is the legacy action name for Azure Artifact Signing
+      # (formerly Azure Trusted Signing). Public Trust is not available to individual
+      # developers outside the US and Canada, so this step is not a realistic path here.
       - name: Sign executable (Azure Trusted Signing)
         if: env.SIGNING_ENABLED == 'true'
         uses: azure/trusted-signing-action@v0
