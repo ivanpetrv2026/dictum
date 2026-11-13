@@ -14,6 +14,8 @@ public sealed class WhisperTranscriber : IDisposable
     private readonly string _language;
     private readonly string? _prompt;
 
+    public string ModelPath { get; }
+
     public WhisperTranscriber(string modelPath, string language, string? prompt = null)
     {
         if (!File.Exists(modelPath))
@@ -21,6 +23,7 @@ public sealed class WhisperTranscriber : IDisposable
             throw new FileNotFoundException("Файл модели Whisper не найден.", modelPath);
         }
 
+        ModelPath = modelPath;
         _factory = WhisperFactory.FromPath(modelPath);
         _language = string.IsNullOrWhiteSpace(language) ? "auto" : language;
         _prompt = string.IsNullOrWhiteSpace(prompt) ? null : prompt;

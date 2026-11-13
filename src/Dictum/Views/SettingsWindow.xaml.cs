@@ -500,7 +500,11 @@ public partial class SettingsWindow : Window
         {
             var result = await _benchmark();
             TestResultText.Text = result.Summary;
-            MessageBox.Show(result.Details, "Проверка качества", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(
+                result.Details,
+                $"Проверка качества — {result.ModelName}, голос: {result.TtsVoice}",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
         catch (Exception ex)
         {

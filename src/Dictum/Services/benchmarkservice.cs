@@ -8,10 +8,19 @@ using Dictum.Speech;
 
 namespace Dictum.Services;
 
-public sealed record BenchmarkResult(int WordErrors, int Words, double Wer, TimeSpan Elapsed, string Details)
+public sealed record BenchmarkResult(
+    int WordErrors,
+    int Words,
+    double Wer,
+    TimeSpan Elapsed,
+    string Details,
+    string TtsVoice,
+    string ModelName,
+    DateTime StartedAt)
 {
     public string Summary =>
-        $"WER {Wer * 100:F1}%   ·   ошибок {WordErrors} из {Words}   ·   {Elapsed.TotalSeconds:F1} с";
+        $"WER {Wer * 100:F1}%   ·   ошибок {WordErrors} из {Words}   ·   {Elapsed.TotalSeconds:F1} с" +
+        $"   ·   {StartedAt:dd.MM HH:mm}";
 }
 
 /// <summary>
@@ -40,10 +49,26 @@ public static class BenchmarkService
         var totalWords = 0;
         var details = new StringBuilder();
         var stopwatch = Stopwatch.StartNew();
+        var startedAt = DateTime.Now;
+
+        // The take set is fixed, so on one machine the WER repeats exactly.
+        // That is expected determinism, not a canned result: every run
+        // synthesises and transcribes the phrases again, and the per-phrase
+        // lines below are the proof.
+        var (voiceName, hasRussianVoice) = DetectRussianVoice();
+        if (!hasRussianVoice)
+        {
+            throw new InvalidOperationException(
+                "Русский TTS-голос не найден — бенчмарк будет бессмысленным. Установите русский голос в параметрах Windows (Параметры → Время и язык → Речь) и повторите.");
+        }
+
+        details.AppendLine($"Запуск: {startedAt:dd.MM.yyyy HH:mm:ss}   ·   модель: {Path.GetFileName(transcriber.ModelPath)}   ·   голос TTS: {voiceName}");
+        details.AppendLine("Набор фраз фиксированный — одинаковый WER между запусками на одной машине ожидаем; различаются время и строки распознавания.");
+        details.AppendLine();
 
         foreach (var phrase in Phrases)
         {
-            var pcm = await Task.Run(() => Synthesize(phrase), cancellationToken).ConfigureAwait(false);
+            var pcm = await Task.Run(() => Synthesize(phrase, voiceName), cancellationToken).ConfigureAwait(false);
             var text = await transcriber.TranscribeAsync(pcm, null, cancellationToken).ConfigureAwait(false);
 
             var errors = WordErrors(phrase, text);
@@ -56,23 +81,29 @@ public static class BenchmarkService
 
         stopwatch.Stop();
 
+        var model = Path.GetFileName(transcriber.ModelPath);
         var wer = totalWords == 0 ? 0 : (double)totalErrors / totalWords;
-        return new BenchmarkResult(totalErrors, totalWords, wer, stopwatch.Elapsed, details.ToString());
+        return new BenchmarkResult(totalErrors, totalWords, wer, stopwatch.Elapsed, details.ToString(), voiceName, model, startedAt);
     }
 
-    private static byte[] Synthesize(string phrase)
+    private static (string VoiceName, bool Found) DetectRussianVoice()
+    {
+        using var synth = new SpeechSynthesizer();
+        var russian = synth.GetInstalledVoices()
+            .FirstOrDefault(voice => voice.Enabled
+                                     && voice.VoiceInfo.Culture.TwoLetterISOLanguageName == "ru");
+        return russian is null ? ("нет", false) : (russian.VoiceInfo.Name, true);
+    }
+
+    private static byte[] Synthesize(string phrase, string voiceName)
     {
         using var stream = new MemoryStream();
 
         using (var synth = new SpeechSynthesizer())
         {
-            var russian = synth.GetInstalledVoices()
-                .FirstOrDefault(voice => voice.Enabled
-                                         && voice.VoiceInfo.Culture.TwoLetterISOLanguageName == "ru");
-
-            if (russian is not null)
+            if (voiceName != "нет")
             {
-                synth.SelectVoice(russian.VoiceInfo.Name);
+                synth.SelectVoice(voiceName);
             }
 
             var format = new SpeechAudioFormatInfo(
