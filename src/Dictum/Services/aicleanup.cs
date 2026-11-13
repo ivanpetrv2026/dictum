@@ -29,6 +29,14 @@ public sealed class AiCleanup
     private readonly string _model;
     private readonly string _endpoint;
 
+    /// <summary>
+    /// Diagnostic state of the last CleanAsync call. Exposed so the caller can
+    /// log why it fell back instead of silently switching to another provider.
+    /// </summary>
+    public int? LastHttpStatus { get; private set; }
+    public string? LastError { get; private set; }
+    public string? LastErrorDetail { get; private set; }
+
     public AiCleanup(string provider, string apiKey, string model, string endpoint)
     {
         _provider = string.IsNullOrWhiteSpace(provider) ? "openrouter" : provider;
@@ -158,14 +166,20 @@ public sealed class AiCleanup
 
     public async Task<string?> CleanAsync(string text, int timeoutSeconds, string? appContext = null)
     {
+        LastHttpStatus = null;
+        LastError = null;
+        LastErrorDetail = null;
+
         if (!IsConfigured || string.IsNullOrWhiteSpace(text))
         {
+            LastError = IsConfigured ? "empty_input" : "not_configured";
             return null;
         }
 
         if (!_apiKey.All(ch => ch >= 32 && ch < 127))
         {
-            Log.Write("ai: API key contains non-ASCII characters, skipping");
+            LastError = "invalid_key_chars";
+            Log.Write($"ai: event=error provider={_provider} reason=invalid_key_chars http=-");
             return null;
         }
 
@@ -183,6 +197,7 @@ public sealed class AiCleanup
 
             if (string.IsNullOrWhiteSpace(raw))
             {
+                LastError ??= "empty_response";
                 return null;
             }
 
@@ -190,7 +205,9 @@ public sealed class AiCleanup
 
             if (LooksLikeReply(text, cleaned))
             {
-                Log.Write("ai: rejected a conversational reply: " + Snippet(cleaned));
+                LastError = "reply_rejected";
+                LastErrorDetail = Flatten(Snippet(cleaned));
+                Log.Write($"ai: event=error provider={_provider} reason=reply_rejected http={LastHttpStatus?.ToString() ?? "-"} detail={LastErrorDetail}");
                 return null;
             }
 
@@ -198,7 +215,9 @@ public sealed class AiCleanup
         }
         catch (Exception ex)
         {
-            Log.Write($"ai failed ({_provider}): " + ex.Message);
+            LastError = ex is OperationCanceledException ? "timeout" : "exception";
+            LastErrorDetail = Flatten(ex.Message);
+            Log.Write($"ai: event=error provider={_provider} reason={LastError} http={LastHttpStatus?.ToString() ?? "-"} detail={LastErrorDetail}");
             return null;
         }
     }
@@ -229,10 +248,13 @@ public sealed class AiCleanup
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         using var response = await Http.SendAsync(request, token).ConfigureAwait(false);
+        LastHttpStatus = (int)response.StatusCode;
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
-            Log.Write($"ai: HTTP {(int)response.StatusCode} from {_endpoint}: {Snippet(errorBody)}");
+            LastError = "http_" + LastHttpStatus;
+            LastErrorDetail = Flatten(Snippet(errorBody));
+            Log.Write($"ai: event=http_error provider={_provider} http={LastHttpStatus} retry_after={RetryAfterSeconds(response)} endpoint={_endpoint} detail={LastErrorDetail}");
             return null;
         }
 
@@ -278,10 +300,13 @@ public sealed class AiCleanup
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         using var response = await Http.SendAsync(request, token).ConfigureAwait(false);
+        LastHttpStatus = (int)response.StatusCode;
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
-            Log.Write($"ai: HTTP {(int)response.StatusCode} from gemini: {Snippet(errorBody)}");
+            LastError = "http_" + LastHttpStatus;
+            LastErrorDetail = Flatten(Snippet(errorBody));
+            Log.Write($"ai: event=http_error provider=gemini http={LastHttpStatus} retry_after={RetryAfterSeconds(response)} detail={LastErrorDetail}");
             return null;
         }
 
@@ -318,6 +343,39 @@ public sealed class AiCleanup
 
     private static string Snippet(string value) =>
         value.Length <= 300 ? value : value[..300];
+
+    private static string Flatten(string value) =>
+        value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+
+    /// <summary>
+    /// Retry-After is logged, not honoured: dictation must stay fast and the
+    /// local polisher already provides a usable result on provider failure.
+    /// </summary>
+    private static string RetryAfterSeconds(HttpResponseMessage response)
+    {
+        try
+        {
+            var header = response.Headers.RetryAfter;
+            if (header is null)
+            {
+                return "-";
+            }
+
+            if (header.Delta is { } delta)
+            {
+                return ((int)Math.Ceiling(delta.TotalSeconds)).ToString();
+            }
+
+            return header.Date is { } date
+                ? Math.Max(0, (int)Math.Ceiling((date - DateTimeOffset.UtcNow).TotalSeconds)).ToString()
+                : "-";
+        }
+        catch
+        {
+            // A malformed header must not hide the original HTTP error.
+            return "-";
+        }
+    }
 
     /// <summary>
     /// Guards against the model answering the dictation instead of editing it.

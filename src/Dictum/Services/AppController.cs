@@ -408,28 +408,33 @@ public sealed class AppController : IDisposable
 
     private async Task<string> ApplyAiAsync(string text)
     {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+
         if (!_settings.AiEnabled)
         {
+            Log.Write($"ai: event=local reason=ai_disabled words={words}");
             return LocalPolisher.Polish(text);
         }
 
-        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
         if (words < _settings.AiMinWords)
         {
+            Log.Write($"ai: event=local reason=below_min_words words={words} min={_settings.AiMinWords}");
             return LocalPolisher.Polish(text);
         }
 
-        var primary = await RunCleanupAsync(_settings.AiProvider, _settings.AiModel, _settings.AiBaseUrl, text);
+        var (primary, primaryReason, primaryHttp) = await RunCleanupAsync(
+            _settings.AiProvider, _settings.AiModel, _settings.AiBaseUrl, text);
         if (!string.IsNullOrWhiteSpace(primary))
         {
             var normalized = _corrector.Correct(primary);
-            Log.Write($"ai: {words} words -> '{normalized}'");
+            Log.Write($"ai: event=success provider={_settings.AiProvider} http={primaryHttp} words={words} text='{normalized}'");
             return normalized;
         }
 
         if (_settings.AiFallbackEnabled)
         {
-            var fallback = await RunCleanupAsync(
+            Log.Write($"ai: event=fallback from={_settings.AiProvider} to=gemini reason={primaryReason} http={primaryHttp} words={words}");
+            var (fallback, fallbackReason, fallbackHttp) = await RunCleanupAsync(
                 "gemini",
                 _settings.AiFallbackModel,
                 AiCleanup.DefaultEndpoint("gemini"),
@@ -438,24 +443,34 @@ public sealed class AppController : IDisposable
             if (!string.IsNullOrWhiteSpace(fallback))
             {
                 var normalized = _corrector.Correct(fallback);
-                Log.Write($"ai (fallback gemini): {words} words -> '{normalized}'");
+                Log.Write($"ai: event=success provider=gemini http={fallbackHttp} fallback=true words={words} text='{normalized}'");
                 return normalized;
             }
+
+            Log.Write($"ai: event=local reason=both_providers_failed primary={primaryReason} fallback={fallbackReason} words={words}");
+        }
+        else
+        {
+            Log.Write($"ai: event=local reason=fallback_disabled primary={primaryReason} words={words}");
         }
 
         return LocalPolisher.Polish(text);
     }
 
-    private async Task<string?> RunCleanupAsync(string provider, string model, string endpoint, string text)
+    private async Task<(string? Text, string Reason, string Http)> RunCleanupAsync(
+        string provider, string model, string endpoint, string text)
     {
         var cleanup = GetCleanup(provider, model, endpoint);
         if (!cleanup.IsConfigured)
         {
-            Log.Write($"ai: {provider} is not configured");
-            return null;
+            Log.Write($"ai: event=not_configured provider={provider} http=-");
+            return (null, "not_configured", "-");
         }
 
-        return await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds, BuildAiContext());
+        var result = await cleanup.CleanAsync(text, _settings.AiTimeoutSeconds, BuildAiContext());
+        var http = cleanup.LastHttpStatus?.ToString() ?? "-";
+        var reason = result is null ? (cleanup.LastError ?? "empty_response") : "ok";
+        return (result, reason, http);
     }
 
     private AiCleanup GetCleanup(string provider, string model, string endpoint)
