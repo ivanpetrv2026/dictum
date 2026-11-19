@@ -6,7 +6,6 @@ using Dictum.Audio;
 using Dictum.Input;
 using Dictum.Settings;
 using Microsoft.Win32;
-using NAudio.Wave;
 
 namespace Dictum.Views;
 
@@ -33,6 +32,8 @@ public partial class OnboardingWizard : Window
 
     private readonly AppSettings _settings;
     private readonly SettingsStore _store;
+    private readonly List<MicDevice> _micDevices = new();
+    private bool _refreshingMics;
     private int _step;
 
     public OnboardingWizard(AppSettings settings, SettingsStore store)
@@ -52,15 +53,7 @@ public partial class OnboardingWizard : Window
         var currentHotkey = Array.FindIndex(HotkeyDefinition.Presets, item => item.Id == settings.HotkeyPreset);
         HotkeyBox.SelectedIndex = currentHotkey >= 0 ? currentHotkey : 0;
 
-        for (var i = 0; i < WaveInEvent.DeviceCount; i++)
-        {
-            MicBox.Items.Add(WaveInEvent.GetCapabilities(i).ProductName);
-        }
-
-        if (MicBox.Items.Count > 0)
-        {
-            MicBox.SelectedIndex = 0;
-        }
+        RefreshMicDevices();
 
         if (!string.IsNullOrWhiteSpace(settings.ModelPath) && File.Exists(settings.ModelPath))
         {
@@ -70,8 +63,122 @@ public partial class OnboardingWizard : Window
         UpdateStep();
     }
 
+    private MicDevice? CurrentMic =>
+        MicBox.SelectedIndex >= 0 && MicBox.SelectedIndex < _micDevices.Count
+            ? _micDevices[MicBox.SelectedIndex]
+            : null;
+
+    /// <summary>
+    /// Re-reads the device list. Called on construction, every time step 3 is
+    /// shown, and by the explicit «Обновить список» button. Windows can add or
+    /// remove a microphone while the wizard is open, so a one-shot enumeration
+    /// in the constructor used to leave the dropdown permanently empty.
+    /// </summary>
+    private void RefreshMicDevices()
+    {
+        _refreshingMics = true;
+        try
+        {
+            var devices = MicDeviceCatalog.Enumerate();
+            var savedName = _settings.AudioDeviceName?.Trim() ?? string.Empty;
+            var savedIndex = _settings.AudioDevice;
+
+            _micDevices.Clear();
+            _micDevices.AddRange(devices);
+
+            MicBox.Items.Clear();
+            foreach (var device in _micDevices)
+            {
+                MicBox.Items.Add(device.Display);
+            }
+
+            var selected = -1;
+            if (savedName.Length > 0)
+            {
+                selected = _micDevices.FindIndex(d =>
+                    string.Equals(d.Name, savedName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (selected < 0 && savedIndex >= 0)
+            {
+                selected = _micDevices.FindIndex(d => d.Usable && d.Index == savedIndex);
+            }
+
+            if (selected < 0)
+            {
+                selected = _micDevices.FindIndex(d => d.Usable);
+            }
+
+            // Even when nothing is usable, select the first disabled/unplugged
+            // entry so the user sees the reason rather than a blank ComboBox.
+            if (selected < 0 && _micDevices.Count > 0)
+            {
+                selected = 0;
+            }
+
+            MicBox.SelectedIndex = selected;
+        }
+        finally
+        {
+            _refreshingMics = false;
+        }
+
+        UpdateMicState();
+    }
+
+    private void ApplyMicSelection()
+    {
+        var device = CurrentMic;
+        if (device is { Usable: true })
+        {
+            _settings.AudioDevice = device.Index;
+            _settings.AudioDeviceName = device.Name;
+        }
+    }
+
+    private void UpdateMicState()
+    {
+        var usable = CurrentMic is { Usable: true };
+        MicTestButton.IsEnabled = usable;
+
+        if (_micDevices.Count == 0)
+        {
+            MicStatus.Text = "Windows не видит ни одного устройства записи. "
+                + MicDeviceCatalog.Hint
+                + ". После включения нажмите «Обновить список».";
+        }
+        else if (!usable)
+        {
+            MicStatus.Text = "Устройства найдены, но ни одно не активно: "
+                + string.Join("; ", _micDevices.Select(d => d.Display)) + ". "
+                + MicDeviceCatalog.Hint
+                + ", затем нажмите «Обновить список». Настройку можно завершить и позже.";
+        }
+        else
+        {
+            MicStatus.Text = string.Empty;
+        }
+    }
+
+    private void OnRefreshMic(object sender, RoutedEventArgs e)
+    {
+        RefreshMicDevices();
+    }
+
+    private void OnMicSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_refreshingMics)
+        {
+            UpdateMicState();
+        }
+    }
+
     private void UpdateStep()
     {
+        if (_step == 2)
+        {
+            RefreshMicDevices();
+        }
         StepTitle.Text = Titles[_step];
         StepHint.Text = Hints[_step];
 
@@ -104,16 +211,16 @@ public partial class OnboardingWizard : Window
         {
             _settings.HotkeyPreset = (HotkeyBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "ctrl+win";
 
-            if (MicBox.SelectedIndex >= 0)
-            {
-                _settings.AudioDevice = MicBox.SelectedIndex;
-            }
+            ApplyMicSelection();
 
             _step = 2;
             UpdateStep();
             return;
         }
 
+        // The list may have been refreshed on step 3 after the user enabled
+        // the microphone in Windows, so re-apply the selection before saving.
+        ApplyMicSelection();
         _store.Save(_settings);
         DialogResult = true;
     }
@@ -225,6 +332,14 @@ public partial class OnboardingWizard : Window
 
     private async void OnMicTest(object sender, RoutedEventArgs e)
     {
+        var mic = CurrentMic;
+        if (mic is not { Usable: true })
+        {
+            MicStatus.Text = "Сначала выберите активный микрофон из списка. "
+                + MicDeviceCatalog.Hint + ", затем нажмите «Обновить список».";
+            return;
+        }
+
         MicTestButton.IsEnabled = false;
         MicProgress.Visibility = Visibility.Visible;
         MicStatus.Text = "Говорите…";
@@ -232,7 +347,7 @@ public partial class OnboardingWizard : Window
         try
         {
             using var recorder = new AudioRecorder();
-            recorder.Start(MicBox.SelectedIndex);
+            recorder.Start(mic.Index);
             await Task.Delay(2500);
             var pcm = recorder.Stop();
 

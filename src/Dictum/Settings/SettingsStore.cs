@@ -1,44 +1,54 @@
 using System.IO;
-using System.Text.Json;
+using Dictum.Services;
 
 namespace Dictum.Settings;
 
 public sealed class SettingsStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
+    private SettingsLoadResult _last = new();
 
-    public string DataDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Dictum");
+    public SettingsStore(string? dataDirectory = null)
+    {
+        DataDirectory = dataDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Dictum");
+    }
+
+    public string DataDirectory { get; }
 
     public string FilePath => Path.Combine(DataDirectory, "settings.json");
 
+    public IReadOnlyList<string> RepairedFields => _last.RepairedFields;
+
+    public bool WasUnreadable => _last.UnreadableBytes is not null;
+
     public AppSettings Load()
     {
-        try
-        {
-            if (!File.Exists(FilePath))
-            {
-                return new AppSettings();
-            }
+        _last = SettingsGuard.Load(FilePath);
 
-            var json = File.ReadAllText(FilePath);
-            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-        }
-        catch (Exception)
+        if (_last.UnreadableBytes is not null)
         {
-            // A broken settings file must never prevent the app from starting.
-            return new AppSettings();
+            Log.Write($"settings: file is unreadable, using defaults; original preserved as {SettingsGuard.BackupNameFor(_last.UnreadableBytes)}");
         }
+        else if (_last.RepairedFields.Count > 0)
+        {
+            Log.Write($"settings: invalid field(s) replaced with defaults: {string.Join(", ", _last.RepairedFields)}");
+        }
+
+        return _last.Settings;
     }
 
     public void Save(AppSettings settings)
     {
-        Directory.CreateDirectory(DataDirectory);
-        var json = JsonSerializer.Serialize(settings, JsonOptions);
-        File.WriteAllText(FilePath, json);
+        SettingsGuard.Save(FilePath, settings, _last.Original, _last.UnreadableBytes);
+
+        // Re-read so an external edit's unknown keys keep surviving the next save.
+        _last = SettingsGuard.Load(FilePath);
+        _last = new SettingsLoadResult
+        {
+            Settings = settings,
+            Original = _last.Original,
+            RepairedFields = _last.RepairedFields
+        };
     }
 }

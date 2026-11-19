@@ -15,23 +15,44 @@ public sealed class TextInjector
 
     public nint CaptureTarget() => GetForegroundWindow();
 
-    public void Focus(nint window)
+    /// <summary>Bounded attempt to restore the captured target; reports whether it worked.</summary>
+    public bool Focus(nint window)
     {
-        if (window != nint.Zero && window != GetForegroundWindow())
+        if (window == nint.Zero)
         {
-            SetForegroundWindow(window);
+            return true;
         }
+
+        for (var i = 0; i < 10; i++)
+        {
+            if (GetForegroundWindow() == window)
+            {
+                return true;
+            }
+
+            SetForegroundWindow(window);
+            Thread.Sleep(20);
+        }
+
+        return GetForegroundWindow() == window;
     }
 
-    public void TypeText(string text)
+    /// <summary>Returns false when synthetic input was refused by the target window.</summary>
+    public bool TypeText(string text)
     {
+        var ok = true;
         foreach (var ch in text)
         {
-            SendUnicode(ch);
+            if (!SendUnicode(ch))
+            {
+                ok = false;
+            }
         }
+
+        return ok;
     }
 
-    private static void SendUnicode(char ch)
+    private static bool SendUnicode(char ch)
     {
         var inputs = new INPUT[2];
 
@@ -44,13 +65,13 @@ public sealed class TextInjector
         inputs[1].u.ki.dwFlags = KeyEventUnicode | KeyEventKeyUp;
 
         var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-        if (sent != inputs.Length)
+        if (sent == inputs.Length)
         {
-            // Synthetic input was blocked (for example, an elevated window has focus).
-            return;
+            Thread.Sleep(1);
         }
 
-        Thread.Sleep(1);
+        // Synthetic input was blocked (for example, an elevated window has focus).
+        return sent == inputs.Length;
     }
 
     [DllImport("user32.dll")]

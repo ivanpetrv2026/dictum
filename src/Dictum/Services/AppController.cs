@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
@@ -23,6 +24,8 @@ public sealed class AppController : IDisposable
     private readonly StatsStore _statsStore = new();
     private readonly TranscriptStore _transcripts = new();
     private readonly ProfileStore _profileStore = new();
+    private readonly PasteLastStore _pasteLast = new();
+    private readonly Stopwatch _takeWatch = new();
 
     private List<AppProfile> _profiles;
 
@@ -50,6 +53,7 @@ public sealed class AppController : IDisposable
         _tray.SettingsRequested += (_, _) => ShowSettings();
         _tray.SetupRequested += (_, _) => ShowOnboarding();
         _tray.AboutRequested += (_, _) => ShowAbout();
+        _tray.PasteLastRequested += (_, _) => PasteLast();
         _tray.ExitRequested += (_, _) => Application.Current.Shutdown();
     }
 
@@ -76,19 +80,25 @@ public sealed class AppController : IDisposable
         _targetWindow = _injector.CaptureTarget();
         _targetApp = WindowInfo.ProcessName(_targetWindow);
         _recordedAt = DateTime.UtcNow;
+        _takeWatch.Restart();
 
         try
         {
-            _recorder.Start(_settings.AudioDevice);
+            _recorder.Start(_settings.AudioDeviceName, _settings.AudioDevice);
             ShowIndicator();
         }
         catch (Exception ex)
         {
             Log.Write("record start failed: " + ex.Message);
+            Diagnostics.Write("capture", "start-failed", _takeWatch.ElapsedMilliseconds,
+                ("reason_code", "start_failed"));
             HideIndicator();
             return;
         }
 
+        Diagnostics.Write("capture", "started", 0,
+            ("device", _recorder.DeviceName),
+            ("fixture", _recorder.IsFixture));
         Log.Write($"press, target=0x{_targetWindow.ToInt64():X}");
     }
 
@@ -98,7 +108,7 @@ public sealed class AppController : IDisposable
     /// A silently skipped take looks like the app doing nothing, so surface
     /// the broken input once in a while instead of only in the log.
     /// </summary>
-    private void NotifyHummingInput()
+    private void NotifyHummingInput(string details)
     {
         var now = DateTime.UtcNow;
         if (now - _lastHumNoticeUtc < TimeSpan.FromMinutes(10))
@@ -109,7 +119,9 @@ public sealed class AppController : IDisposable
         _lastHumNoticeUtc = now;
         _tray.ShowError(
             "Dictum: микрофон не подаёт речь",
-            "Записан только фоновый гул без речи. Проверьте штекер и кабель микрофона, попробуйте другой разъём.");
+            $"Устройство {_recorder.DeviceName}. {details} " +
+            "Проверьте штекер и кабель, уберите усиление микрофона в панели Realtek, " +
+            "попробуйте другой разъём. Метрики — %APPDATA%\\Dictum\\dictum.log");
     }
 
     private async void OnReleased(object? sender, EventArgs e)
@@ -118,6 +130,17 @@ public sealed class AppController : IDisposable
         HideIndicator();
         var elapsed = (DateTime.UtcNow - _recordedAt).TotalMilliseconds;
         Log.Write($"release, bytes={pcm.Length}, duration={elapsed:F0}ms");
+
+        if (_recorder.LastTakeStalled || _recorder.LastTakeDigitallySilent)
+        {
+            Log.Write("audio: input stalled or delivered digital silence; the device reopens on the next press");
+            Diagnostics.Write("capture", "input-unhealthy", _takeWatch.ElapsedMilliseconds,
+                ("stalled", _recorder.LastTakeStalled),
+                ("digital_silence", _recorder.LastTakeDigitallySilent));
+        }
+
+        Diagnostics.Write("capture", "released", _takeWatch.ElapsedMilliseconds,
+            ("bytes", pcm.Length), ("duration_ms", (long)elapsed));
 
         if (Environment.GetEnvironmentVariable("DICTUM_DUMP_PCM") == "1" && pcm.Length > 0)
         {
@@ -138,6 +161,7 @@ public sealed class AppController : IDisposable
 
         if (pcm.Length == 0)
         {
+            Diagnostics.Write("capture", "empty", _takeWatch.ElapsedMilliseconds);
             return;
         }
 
@@ -153,11 +177,44 @@ public sealed class AppController : IDisposable
 
         // A floating jack hums at mains frequency: loud, almost no zero
         // crossings, flat envelope. Whisper turns that into hallucinations.
+        // A working but badly grounded mic can carry real speech *under* the
+        // hum, so remove the stationary 50 Hz component and re-evaluate the
+        // residual instead of discarding the take outright.
+        var humRescued = false;
+        // Zero crossings of the residual are a cheap indication of how much
+        // speech survived: a hum-only residue stays at ~0.02, a take with a
+        // voice at ~0.03-0.07. It is only used to decide whether a very short
+        // (one-word) transcript can be trusted, never to drop speech outright.
+        var humResidualZcr = 0.0;
         if (AudioStats.LooksLikeHum(stats))
         {
-            Log.Write($"audio: looks like a disconnected/humming input (rms={stats.Rms:F0}, zcr={stats.Zcr:F3}, flatness={stats.Flatness:F1}), skipped");
-            NotifyHummingInput();
-            return;
+            var filtered = MainsHumFilter.Remove(pcm);
+            var residual = AudioStats.Analyze(filtered);
+            humResidualZcr = residual.Zcr;
+            var share = AudioStats.ResidualShare(stats, residual);
+            var residualPeak = AudioNormalizer.Peak(filtered);
+            Log.Write($"audio: hum filter residual rms={residual.Rms:F0} ({share:P1} of original), zcr={residual.Zcr:F3}, flatness={residual.Flatness:F1}, bands={residual.LowBand:F0}/{residual.HighBand:F0}, peak={residualPeak}");
+
+            if (!AudioStats.HasRecoverableSpeech(stats, residual, residualPeak))
+            {
+                Log.Write($"audio: looks like a disconnected/humming input (rms={stats.Rms:F0}, zcr={stats.Zcr:F3}, flatness={stats.Flatness:F1}), no recoverable speech, skipped");
+                Diagnostics.Write("capture", "hum-rejected", _takeWatch.ElapsedMilliseconds,
+                    ("rms", (long)stats.Rms), ("zcr", stats.Zcr),
+                    ("residual_share", share), ("high_band", (long)stats.HighBand));
+                NotifyHummingInput($"Записан только гул 50 Гц: после фильтрации осталось {share:P1} сигнала без признаков речи.");
+                return;
+            }
+
+            var (cleaned, cleanedGain) = AudioNormalizer.Normalize(filtered);
+            if (cleanedGain > 0.1)
+            {
+                pcm = cleaned;
+                gainDb = cleanedGain;
+            }
+
+            peak = AudioNormalizer.Peak(pcm);
+            humRescued = true;
+            Log.Write($"audio: speech recovered from hum-dominated take (residual {share:P1}, gain {gainDb:F1} dB)");
         }
 
         var (speechStart, speechEnd) = Vad.FindSpeech(pcm);
@@ -167,9 +224,13 @@ public sealed class AppController : IDisposable
         {
             // Very quiet recordings can defeat the detector; if there is still
             // measurable energy, let the model try instead of dropping the take.
+            // A hum-rescued take goes the same way: the transcript validator,
+            // not the detector, decides whether it was speech.
             if (peak < 800)
             {
                 Log.Write($"vad: no speech in {pcm.Length / 32000.0:F1}s (peak {peak}), skipped");
+                Diagnostics.Write("capture", "no-speech", _takeWatch.ElapsedMilliseconds,
+                    ("peak", (long)peak), ("hum_rescued", humRescued));
                 return;
             }
 
@@ -187,28 +248,67 @@ public sealed class AppController : IDisposable
         }
 
         Log.Write($"vad: speech {speechSamples / 16000.0:F1}s, gain {gainDb:F1} dB, app='{_targetApp}'");
+        Diagnostics.Write("capture", "speech", _takeWatch.ElapsedMilliseconds,
+            ("speech_ms", (long)(speechSamples / 16.0)), ("gain_db", gainDb), ("hum_rescued", humRescued));
 
         _busy = true;
         try
         {
             var text = await TranscribeAsync(pcm);
-            Log.Write($"asr: {text.Length} chars: '{text}'");
-            if (string.IsNullOrWhiteSpace(text))
+            // Diagnostic logs never hold dictated words — only lengths and phases.
+            Log.Write($"asr: {text.Length} chars");
+
+            // Whisper answers a hum residue — and a wordless tone — with a
+            // handful of stock phrases. Those must never be inserted, so the
+            // transcript itself decides whether the take was speech. A
+            // hum-dominated take has to clear a slightly higher bar because its
+            // residue is noisier.
+            // A one-word phrase is perfectly normal dictation. The strict bar
+            // applies only when the residue still looks like hum (zcr < 0.03),
+            // where a single word is far more likely to be a decoder artifact.
+            var residueLooksLikeSpeech = humResidualZcr >= 0.03;
+            var minWords = humRescued && !residueLooksLikeSpeech ? 2 : 1;
+            var minLetters = humRescued && !residueLooksLikeSpeech ? 4 : 2;
+            if (!TranscriptValidator.LooksLikeSpeech(text, minWords, minLetters))
             {
+                Log.Write($"asr: transcript rejected ({(string.IsNullOrWhiteSpace(text) ? 0 : text.Length)} chars, {Words(text)} words, hum_rescued={humRescued}, residual_zcr={humResidualZcr:F3})");
+                Diagnostics.Write("asr", "hallucination", _takeWatch.ElapsedMilliseconds,
+                    ("chars", text.Length), ("word_count", Words(text)), ("hum_rescued", humRescued));
+                if (humRescued)
+                {
+                    NotifyHummingInput("Записан только гул 50 Гц: в остатке не нашлось речи. Проверьте штекер и уровень микрофона.");
+                }
+
                 return;
             }
+
+            Diagnostics.Write("asr", "ok", _takeWatch.ElapsedMilliseconds, ("chars", text.Length));
 
             var corrected = _corrector.Correct(text);
             if (!string.Equals(corrected, text, StringComparison.Ordinal))
             {
-                Log.Write($"corrected: '{corrected}'");
+                Log.Write($"corrector: changed {text.Length} -> {corrected.Length} chars");
             }
 
             var final = await ApplyAiAsync(corrected);
+            Diagnostics.Write("processing", "done", _takeWatch.ElapsedMilliseconds,
+                ("chars", final.Length));
 
-            _injector.Focus(_targetWindow);
+            var focused = _injector.Focus(_targetWindow);
             await Task.Delay(120);
-            _injector.TypeText(final + " ");
+            var pasted = _injector.TypeText(final + " ");
+            _pasteLast.Record(final, pasted);
+            Diagnostics.Write("paste", pasted ? "ok" : "blocked", _takeWatch.ElapsedMilliseconds,
+                ("focused", focused), ("chars", final.Length));
+
+            if (!pasted)
+            {
+                Log.Write("paste: SendInput was blocked; text kept for Paste Last");
+                _tray.ShowError(
+                    "Dictum: текст не вставлен",
+                    "Окно отклонило ввод. Фраза сохранена — используйте пункт трея «Вставить последнюю фразу».");
+            }
+
             _statsStore.Record(final);
 
             if (_settings.SaveTranscripts)
@@ -375,7 +475,7 @@ public sealed class AppController : IDisposable
         }
 
         _transcriber ??= CreateTranscriber();
-        Log.Write($"context benchmark: started, chunk='{chunk}'");
+        Log.Write($"context benchmark: started, chunk={chunk.Length} chars");
         var result = await BenchmarkService.RunContextAsync(_transcriber, new[] { chunk }, _corrector);
         Log.Write("context benchmark: " + result.Summary);
         return result;
@@ -552,7 +652,7 @@ public sealed class AppController : IDisposable
         _hotkey.Update(HotkeyDefinition.Parse(_settings.HotkeyPreset));
         _transcriber?.Dispose();
         _transcriber = null;
-        Log.Write($"onboarding done: model='{_settings.ModelPath}', hotkey={_settings.HotkeyPreset}, mic={_settings.AudioDevice}");
+        Log.Write($"onboarding done: model='{_settings.ModelPath}', hotkey={_settings.HotkeyPreset}, mic={_settings.AudioDevice} name='{_settings.AudioDeviceName}'");
     }
 
     public void ShowSettings()
@@ -582,6 +682,38 @@ public sealed class AppController : IDisposable
         _transcriber = null;
     }
 
+    /// <summary>
+    /// Types the last completed dictation again into whatever window has focus.
+    /// The text is kept even when the original SendInput was refused.
+    /// </summary>
+    private void PasteLast()
+    {
+        if (!_pasteLast.TryTake(out var text))
+        {
+            _tray.ShowInfo("Dictum", "Пока нет ни одной распознанной фразы.");
+            return;
+        }
+
+        try
+        {
+            var target = _injector.CaptureTarget();
+            var focused = _injector.Focus(target);
+            var ok = _injector.TypeText(text + " ");
+            Log.Write($"paste-last: chars={text.Length} focused={focused} ok={ok}");
+            Diagnostics.Write("paste-last", ok ? "ok" : "blocked", 0,
+                ("chars", text.Length), ("focused", focused));
+
+            if (!ok)
+            {
+                _tray.ShowError("Dictum: текст не вставлен", "Окно отклонило ввод. Выберите нужное окно и повторите.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("paste-last failed: " + ex.Message);
+        }
+    }
+
     private async Task<string> ApplyAiAsync(string text)
     {
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
@@ -603,7 +735,7 @@ public sealed class AppController : IDisposable
         if (!string.IsNullOrWhiteSpace(primary))
         {
             var normalized = _corrector.Correct(primary);
-            Log.Write($"ai: event=success provider={_settings.AiProvider} http={primaryHttp} words={words} text='{normalized}'");
+            Log.Write($"ai: event=success provider={_settings.AiProvider} http={primaryHttp} words={words} chars={normalized.Length}");
             return normalized;
         }
 
@@ -619,7 +751,7 @@ public sealed class AppController : IDisposable
             if (!string.IsNullOrWhiteSpace(fallback))
             {
                 var normalized = _corrector.Correct(fallback);
-                Log.Write($"ai: event=success provider=gemini http={fallbackHttp} fallback=true words={words} text='{normalized}'");
+                Log.Write($"ai: event=success provider=gemini http={fallbackHttp} fallback=true words={words} chars={normalized.Length}");
                 return normalized;
             }
 
@@ -661,14 +793,20 @@ public sealed class AppController : IDisposable
         return cleanup;
     }
 
+    private static int Words(string? text)
+        => string.IsNullOrWhiteSpace(text)
+            ? 0
+            : text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+
     private string BuildPrompt()
     {
-        var canonical = _vocabulary
-            .Select(term => term.Canonical)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Take(30);
+        var plan = PromptBudget.Build(
+            _vocabulary.Select(term => term.Canonical),
+            Math.Max(16, _settings.PromptMaxChars),
+            Math.Max(1, _settings.PromptMaxTerms));
 
-        return string.Join(", ", canonical) + ".";
+        Log.Write($"prompt: {plan.TermsRead} of {plan.TermsTotal} terms, {plan.Characters}/{plan.Budget} chars, cap={plan.TermCap}, truncated={plan.Truncated}");
+        return plan.Text;
     }
 
     private static string? ReadFocusedText()
@@ -734,7 +872,7 @@ public sealed class AppController : IDisposable
             }
 
             target.Variants.Add(before);
-            Log.Write($"learned: '{before}' -> '{target.Canonical}'");
+            Log.Write($"learned: 1 variant added to a vocabulary term ({before.Length} -> {target.Canonical.Length} chars)");
             learned++;
         }
 

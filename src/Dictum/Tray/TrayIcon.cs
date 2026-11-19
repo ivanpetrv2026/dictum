@@ -13,6 +13,8 @@ public sealed class TrayIcon : IDisposable
 
     public event EventHandler? AboutRequested;
 
+    public event EventHandler? PasteLastRequested;
+
     public event EventHandler? ExitRequested;
 
     public TrayIcon()
@@ -21,6 +23,8 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add("Настройки…", null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add("Мастер настройки…", null, (_, _) => SetupRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add("О программе", null, (_, _) => AboutRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Вставить последнюю фразу", null, (_, _) => PasteLastRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
 

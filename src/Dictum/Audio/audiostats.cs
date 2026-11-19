@@ -177,4 +177,27 @@ public static class AudioStats
         => metrics.Rms > 3000
            && metrics.Zcr < 0.02
            && (metrics.Flatness < 2.5 || metrics.HighBand < 0.02 * metrics.LowBand);
+
+    /// <summary>
+    /// Decides whether anything at all survived hum removal, i.e. whether the
+    /// take is worth transcribing.
+    ///
+    /// This used to demand zcr >= 0.02 and flatness >= 2.5 on the residual, and
+    /// that is what broke dictation on 19.11: speech at a realistic level left
+    /// zcr 0.010-0.018 while the one take that happened to reach 0.023 was
+    /// transcribed correctly, so nine good takes were dropped and one passed on
+    /// a coin flip. Acoustic statistics cannot separate "quiet speech under
+    /// hum" from "hum only" after filtering — the residue is bursty in both
+    /// cases. The real arbiter is the transcript itself
+    /// (TranscriptValidator.LooksLikeSpeech); this method only rejects takes
+    /// where the filter left essentially nothing.
+    /// </summary>
+    public static bool HasRecoverableSpeech(Metrics original, Metrics residual, int residualPeak)
+        => original.Rms > 0
+           && residual.Rms / original.Rms >= 0.02
+           && residualPeak > 600;
+
+    /// <summary>Share of the original energy left after hum removal.</summary>
+    public static double ResidualShare(Metrics original, Metrics residual)
+        => original.Rms > 0 ? residual.Rms / original.Rms : 0;
 }

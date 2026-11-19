@@ -15,6 +15,18 @@ public sealed class AppSettings
 
     public int AudioDevice { get; set; }
 
+    /// <summary>
+    /// Preferred input by product name. An index is fragile: Windows renumbers
+    /// devices after a plug/unplug, so a name is the durable choice.
+    /// </summary>
+    public string AudioDeviceName { get; set; } = string.Empty;
+
+    /// <summary>Whisper prompt budget, in characters.</summary>
+    public int PromptMaxChars { get; set; } = 500;
+
+    /// <summary>Maximum vocabulary terms offered to Whisper.</summary>
+    public int PromptMaxTerms { get; set; } = 30;
+
     public int MinRecordMs { get; set; } = 300;
 
     public bool LearnEnabled { get; set; } = true;

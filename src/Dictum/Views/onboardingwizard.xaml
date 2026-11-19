@@ -56,7 +56,10 @@
 
             <StackPanel x:Name="PanelMic" Visibility="Collapsed">
                 <TextBlock FontWeight="SemiBold" Text="Микрофон" />
-                <ComboBox x:Name="MicBox" Width="360" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <ComboBox x:Name="MicBox" Width="360" HorizontalAlignment="Left" SelectionChanged="OnMicSelectionChanged" />
+                    <Button x:Name="RefreshMicButton" Width="150" Margin="10,0,0,0" Content="Обновить список" Click="OnRefreshMic" />
+                </StackPanel>
                 <Button x:Name="MicTestButton" Width="200" Margin="0,14,0,0" HorizontalAlignment="Left" Content="Проверить микрофон" Click="OnMicTest" />
                 <ProgressBar x:Name="MicProgress" Height="6" Margin="0,10,0,0" Visibility="Collapsed" />
                 <TextBlock x:Name="MicStatus" Margin="0,8,0,0" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" />

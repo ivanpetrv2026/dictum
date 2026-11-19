@@ -34,10 +34,22 @@ public partial class App : System.Windows.Application
                     }
                 }
 
+                var winmm = new List<string>();
+                for (var i = 0; i < NAudio.Wave.WaveInEvent.DeviceCount; i++)
+                {
+                    winmm.Add(NAudio.Wave.WaveInEvent.GetCapabilities(i).ProductName);
+                }
+
+                var micSettings = new SettingsStore().Load();
+                var resolution = Dictum.Audio.DeviceResolver.Resolve(
+                    winmm, micSettings.AudioDeviceName, micSettings.AudioDevice);
+                report.AppendLine($"winmm: {winmm.Count} device(s): {string.Join(" | ", winmm)}");
+                report.AppendLine($"winmm resolution: index={resolution.Index} name='{resolution.Name}' reason={resolution.Reason} ({resolution.Detail})");
+
                 foreach (var rate in new[] { 16000, 48000 })
                 {
                     using var recorder = new Dictum.Audio.AudioRecorder();
-                    recorder.Start(0, rate);
+                    recorder.Start(Math.Max(0, resolution.Index), rate);
                     System.Threading.Thread.Sleep(3000);
                     var pcm = recorder.Stop();
 
@@ -88,7 +100,7 @@ public partial class App : System.Windows.Application
                 CudaBootstrap.Prepare();
                 var current = new SettingsStore().Load();
                 var vocabulary = new VocabularyStore().Load();
-                var prompt = string.Join(", ", vocabulary.Select(term => term.Canonical).Take(30)) + ".";
+                var prompt = Dictum.Vocabulary.PromptBudget.Build(vocabulary.Select(term => term.Canonical)).Text;
 
                 var transcriber = new Dictum.Speech.WhisperTranscriber(current.ModelPath, current.Language, prompt);
                 var result = BenchmarkService.RunAsync(transcriber).GetAwaiter().GetResult();
@@ -122,7 +134,7 @@ public partial class App : System.Windows.Application
                 var current = new SettingsStore().Load();
                 var vocabulary = new VocabularyStore().Load();
                 var corrector = new TermCorrector(vocabulary);
-                var prompt = string.Join(", ", vocabulary.Select(term => term.Canonical).Take(30)) + ".";
+                var prompt = Dictum.Vocabulary.PromptBudget.Build(vocabulary.Select(term => term.Canonical)).Text;
 
                 var transcriber = new Dictum.Speech.WhisperTranscriber(current.ModelPath, current.Language, prompt);
                 var stats = new Dictum.Services.StatsStore().Load();
@@ -168,6 +180,154 @@ public partial class App : System.Windows.Application
                 "polish-test.txt");
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(reportPath)!);
             System.IO.File.WriteAllText(reportPath, "in : " + sample + Environment.NewLine + "out: " + polished);
+            Shutdown();
+            return;
+        }
+
+        if (e.Args.Contains("--fixture-test"))
+        {
+            // Drives the real dictation pipeline from a WAV file instead of the
+            // microphone. Nothing is pasted and no network call is made.
+            var index = Array.IndexOf(e.Args, "--fixture-test");
+            var fixturePath = index + 1 < e.Args.Length
+                ? e.Args[index + 1]
+                : Environment.GetEnvironmentVariable("DICTUM_AUDIO_FIXTURE") ?? string.Empty;
+
+            var report = new System.Text.StringBuilder();
+            var tracePath = Environment.GetEnvironmentVariable("DICTUM_FIXTURE_TRACE");
+            Action<string> trace = step =>
+            {
+                if (!string.IsNullOrEmpty(tracePath))
+                {
+                    System.IO.File.AppendAllText(tracePath,
+                        $"{DateTime.Now:HH:mm:ss.fff} {step}{Environment.NewLine}");
+                }
+            };
+            trace("start");
+            try
+            {
+                var (source, error) = Dictum.Audio.FixtureSource.TryLoad(fixturePath);
+                if (source is null)
+                {
+                    throw new InvalidOperationException(error ?? "fixture not loaded");
+                }
+
+                var pcm = source.ToArray();
+                var (normalized, gain) = Dictum.Audio.AudioNormalizer.Normalize(pcm);
+                if (gain > 0.1)
+                {
+                    pcm = normalized;
+                }
+
+                var stats = Dictum.Audio.AudioStats.Analyze(pcm);
+                report.AppendLine($"fixture: {source.Path} | {source.DurationMs} ms | {source.ChunkCount} chunks");
+                report.AppendLine($"audio: peak={Dictum.Audio.AudioNormalizer.Peak(pcm)} rms={stats.Rms:F0} zcr={stats.Zcr:F3} flatness={stats.Flatness:F1} bands={stats.LowBand:F0}/{stats.HighBand:F0} gain={gain:F1} dB");
+                Dictum.Services.Diagnostics.Write("fixture", "loaded", 0, ("duration_ms", source.DurationMs));
+
+                var humRescued = false;
+                var humResidualZcr = 0.0;
+                if (Dictum.Audio.AudioStats.LooksLikeHum(stats))
+                {
+                    var filtered = Dictum.Audio.MainsHumFilter.Remove(pcm);
+                    var residual = Dictum.Audio.AudioStats.Analyze(filtered);
+                    humResidualZcr = residual.Zcr;
+                    var share = Dictum.Audio.AudioStats.ResidualShare(stats, residual);
+                    report.AppendLine($"hum guard: residual={share:P1}");
+
+                    if (!Dictum.Audio.AudioStats.HasRecoverableSpeech(
+                            stats, residual, Dictum.Audio.AudioNormalizer.Peak(filtered)))
+                    {
+                        throw new InvalidOperationException("hum guard rejected the fixture: no recoverable speech");
+                    }
+
+                    pcm = filtered;
+                    humRescued = true;
+                    report.AppendLine("hum guard: speech recovered from hum-dominated take");
+                }
+
+                trace("audio-prepared");
+                var (start, end) = Dictum.Audio.Vad.FindSpeech(pcm);
+                report.AppendLine($"vad: {start / 16000.0:F2}..{end / 16000.0:F2} s");
+
+                // Match AppController: a speechless clip must not reach Whisper,
+                // but measurable energy still gets a chance and the transcript
+                // validator decides.
+                if (end <= start)
+                {
+                    if (Dictum.Audio.AudioNormalizer.Peak(pcm) < 800)
+                    {
+                        throw new InvalidOperationException(
+                            "no speech detected in the fixture; sending it to Whisper would hallucinate");
+                    }
+
+                    report.AppendLine("vad: detector found nothing, sending the whole take");
+                    start = 0;
+                    end = pcm.Length / 2;
+                }
+                if (end > start && end <= pcm.Length / 2)
+                {
+                    var trimmed = new byte[(end - start) * 2];
+                    Array.Copy(pcm, start * 2, trimmed, 0, trimmed.Length);
+                    pcm = trimmed;
+                }
+
+                trace("vad-done");
+                CudaBootstrap.Prepare();
+                trace("cuda-prepared");
+                var fixtureSettings = new SettingsStore().Load();
+                trace("settings-loaded");
+                var fixtureVocabulary = new VocabularyStore().Load();
+                var fixturePrompt = Dictum.Vocabulary.PromptBudget
+                    .Build(fixtureVocabulary.Select(term => term.Canonical)).Text;
+                trace("prompt-built");
+
+                // Same construction as the working --benchmark path: no forced
+                // runtime order and no explicit factory disposal (disposing the
+                // native factory from the startup thread can block shutdown).
+                var fixtureTranscriber = new Dictum.Speech.WhisperTranscriber(
+                    fixtureSettings.ModelPath, fixtureSettings.Language, fixturePrompt);
+                trace("transcriber-created");
+                // BenchmarkService reaches Whisper from a thread-pool continuation.
+                // Calling the async enumerable synchronously on the UI thread and
+                // blocking here deadlocks on WPF's SynchronizationContext.
+                var text = Task.Run(
+                    () => fixtureTranscriber.TranscribeAsync(pcm).GetAwaiter().GetResult())
+                    .GetAwaiter().GetResult();
+                trace("transcribed");
+
+                report.AppendLine($"asr: {text.Length} chars");
+                report.AppendLine("text: " + text);
+                report.AppendLine("polished: " + Dictum.Services.LocalPolisher.Polish(text));
+                var passed = !string.IsNullOrWhiteSpace(text);
+                var residueLooksLikeSpeech = humResidualZcr >= 0.03;
+                var minWords = humRescued && !residueLooksLikeSpeech ? 2 : 1;
+                var minLetters = humRescued && !residueLooksLikeSpeech ? 4 : 2;
+                if (passed && !Dictum.Services.TranscriptValidator.LooksLikeSpeech(text, minWords, minLetters))
+                {
+                    passed = false;
+                    report.AppendLine("validator: transcript rejected as a hallucination");
+                }
+
+                report.AppendLine(passed ? "VERDICT: PASS" : "VERDICT: FAIL (transcript not usable)");
+                if (!passed)
+                {
+                    Environment.ExitCode = 1;
+                }
+                Dictum.Services.Diagnostics.Write("fixture", passed ? "ok" : "rejected", 0,
+                    ("chars", text.Length), ("hum_rescued", humRescued));
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine("VERDICT: FAIL");
+                report.AppendLine("error: " + ex);
+                Environment.ExitCode = 1;
+            }
+
+            var fixtureReportPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Dictum", "fixture-test.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fixtureReportPath)!);
+            System.IO.File.WriteAllText(fixtureReportPath, report.ToString());
             Shutdown();
             return;
         }
