@@ -225,12 +225,10 @@ public partial class App : System.Windows.Application
                 Dictum.Services.Diagnostics.Write("fixture", "loaded", 0, ("duration_ms", source.DurationMs));
 
                 var humRescued = false;
-                var humResidualZcr = 0.0;
                 if (Dictum.Audio.AudioStats.LooksLikeHum(stats))
                 {
                     var filtered = Dictum.Audio.MainsHumFilter.Remove(pcm);
                     var residual = Dictum.Audio.AudioStats.Analyze(filtered);
-                    humResidualZcr = residual.Zcr;
                     var share = Dictum.Audio.AudioStats.ResidualShare(stats, residual);
                     report.AppendLine($"hum guard: residual={share:P1}");
 
@@ -299,13 +297,10 @@ public partial class App : System.Windows.Application
                 report.AppendLine("text: " + text);
                 report.AppendLine("polished: " + Dictum.Services.LocalPolisher.Polish(text));
                 var passed = !string.IsNullOrWhiteSpace(text);
-                var residueLooksLikeSpeech = humResidualZcr >= 0.03;
-                var minWords = humRescued && !residueLooksLikeSpeech ? 2 : 1;
-                var minLetters = humRescued && !residueLooksLikeSpeech ? 4 : 2;
-                if (passed && !Dictum.Services.TranscriptValidator.LooksLikeSpeech(text, minWords, minLetters))
+                if (passed && !Dictum.Services.TranscriptValidator.LooksLikeSpeech(text, out var rejectReason))
                 {
                     passed = false;
-                    report.AppendLine("validator: transcript rejected as a hallucination");
+                    report.AppendLine("validator: transcript rejected (reason=" + rejectReason + ")");
                 }
 
                 report.AppendLine(passed ? "VERDICT: PASS" : "VERDICT: FAIL (transcript not usable)");

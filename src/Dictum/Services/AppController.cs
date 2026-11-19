@@ -181,16 +181,10 @@ public sealed class AppController : IDisposable
         // hum, so remove the stationary 50 Hz component and re-evaluate the
         // residual instead of discarding the take outright.
         var humRescued = false;
-        // Zero crossings of the residual are a cheap indication of how much
-        // speech survived: a hum-only residue stays at ~0.02, a take with a
-        // voice at ~0.03-0.07. It is only used to decide whether a very short
-        // (one-word) transcript can be trusted, never to drop speech outright.
-        var humResidualZcr = 0.0;
         if (AudioStats.LooksLikeHum(stats))
         {
             var filtered = MainsHumFilter.Remove(pcm);
             var residual = AudioStats.Analyze(filtered);
-            humResidualZcr = residual.Zcr;
             var share = AudioStats.ResidualShare(stats, residual);
             var residualPeak = AudioNormalizer.Peak(filtered);
             Log.Write($"audio: hum filter residual rms={residual.Rms:F0} ({share:P1} of original), zcr={residual.Zcr:F3}, flatness={residual.Flatness:F1}, bands={residual.LowBand:F0}/{residual.HighBand:F0}, peak={residualPeak}");
@@ -260,20 +254,15 @@ public sealed class AppController : IDisposable
 
             // Whisper answers a hum residue — and a wordless tone — with a
             // handful of stock phrases. Those must never be inserted, so the
-            // transcript itself decides whether the take was speech. A
-            // hum-dominated take has to clear a slightly higher bar because its
-            // residue is noisier.
-            // A one-word phrase is perfectly normal dictation. The strict bar
-            // applies only when the residue still looks like hum (zcr < 0.03),
-            // where a single word is far more likely to be a decoder artifact.
-            var residueLooksLikeSpeech = humResidualZcr >= 0.03;
-            var minWords = humRescued && !residueLooksLikeSpeech ? 2 : 1;
-            var minLetters = humRescued && !residueLooksLikeSpeech ? 4 : 2;
-            if (!TranscriptValidator.LooksLikeSpeech(text, minWords, minLetters))
+            // transcript itself is the arbiter. Acoustic gates on the residual
+            // are deliberately gone: live speech under this hum has been
+            // measured at zcr 0.023-0.048, overlapping the hum-only residue,
+            // so any threshold here drops real one-word dictation.
+            if (!TranscriptValidator.LooksLikeSpeech(text, out var rejectReason))
             {
-                Log.Write($"asr: transcript rejected ({(string.IsNullOrWhiteSpace(text) ? 0 : text.Length)} chars, {Words(text)} words, hum_rescued={humRescued}, residual_zcr={humResidualZcr:F3})");
+                Log.Write($"asr: transcript rejected ({(string.IsNullOrWhiteSpace(text) ? 0 : text.Length)} chars, {Words(text)} words, hum_rescued={humRescued}, reason={rejectReason})");
                 Diagnostics.Write("asr", "hallucination", _takeWatch.ElapsedMilliseconds,
-                    ("chars", text.Length), ("word_count", Words(text)), ("hum_rescued", humRescued));
+                    ("chars", text.Length), ("word_count", Words(text)), ("reason", rejectReason), ("hum_rescued", humRescued));
                 if (humRescued)
                 {
                     NotifyHummingInput("Записан только гул 50 Гц: в остатке не нашлось речи. Проверьте штекер и уровень микрофона.");

@@ -11,6 +11,9 @@ namespace Dictum.Services;
 /// So the arbiter is the text: if it looks like one of those phrases, is
 /// shorter than a spoken phrase, carries no letters or repeats itself, the take
 /// is treated as hum and dropped. Everything else is inserted.
+///
+/// Callers may ask for a short machine-readable reason code. It never contains
+/// dictated words, so it is safe to write to the diagnostic log.
 /// </summary>
 public static class TranscriptValidator
 {
@@ -41,17 +44,21 @@ public static class TranscriptValidator
         "конец", "дальше", "продолжение"
     };
 
-    /// <summary>
-    /// Returns true when the text plausibly came from a human speaking.
-    /// </summary>
-    /// <param name="text">Raw transcript.</param>
-    /// <param name="minWords">Minimum word count for the take to count as speech.</param>
-    /// <param name="minLetters">Minimum number of letters in the transcript.</param>
     public static bool LooksLikeSpeech(string? text, int minWords = 1, int minLetters = 2)
+        => LooksLikeSpeech(text, minWords, minLetters, out _);
+
+    public static bool LooksLikeSpeech(string? text, out string reason)
+        => LooksLikeSpeech(text, 1, 2, out reason);
+
+    /// <summary>
+    /// Returns true when the text plausibly came from a human speaking and
+    /// writes a short, word-free reason code describing a rejection.
+    /// </summary>
+    public static bool LooksLikeSpeech(string? text, int minWords, int minLetters, out string reason)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return false;
+            return Reject("empty", out reason);
         }
 
         var trimmed = text.Trim();
@@ -62,7 +69,7 @@ public static class TranscriptValidator
             (trimmed.Length > 1 && (trimmed[0] == '[' || trimmed[0] == '(') &&
              (trimmed[^1] == ']' || trimmed[^1] == ')')))
         {
-            return false;
+            return Reject("sound-tag", out reason);
         }
 
         var letters = 0;
@@ -83,33 +90,33 @@ public static class TranscriptValidator
         // "*Ding*", "..." and other non-verbal output carries almost no letters.
         if (letters < Math.Max(1, minLetters) || visible == 0 || letters / (double)visible < 0.5)
         {
-            return false;
+            return Reject("nonverbal", out reason);
         }
 
         var normalized = Normalize(trimmed);
         if (ExactHallucinations.Contains(normalized))
         {
-            return false;
+            return Reject("hallucination-word", out reason);
         }
 
         foreach (var phrase in Hallucinations)
         {
             if (normalized.Contains(phrase, StringComparison.Ordinal))
             {
-                return false;
+                return Reject("hallucination-phrase", out reason);
             }
         }
 
         var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length < Math.Max(1, minWords))
         {
-            return false;
+            return Reject("too-short", out reason);
         }
 
         // A single word repeated over and over is a decoder loop, not speech.
         if (words.Length >= 4 && words.Distinct(StringComparer.Ordinal).Count() == 1)
         {
-            return false;
+            return Reject("repeat-loop", out reason);
         }
 
         // Any three-word sequence that keeps coming back is a loop as well.
@@ -123,12 +130,19 @@ public static class TranscriptValidator
                 seen[key] = count + 1;
                 if (seen[key] >= 3)
                 {
-                    return false;
+                    return Reject("repeat-loop", out reason);
                 }
             }
         }
 
+        reason = "ok";
         return true;
+    }
+
+    private static bool Reject(string code, out string reason)
+    {
+        reason = code;
+        return false;
     }
 
     private static string Normalize(string text)
